@@ -1,0 +1,3000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>WattTheGrid — Community Grid Digital Twin</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/GammaCorrectionShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+<style>
+:root{
+  --ink:#070b12;
+  --panel:rgba(12,18,28,0.84);
+  --panel-solid:#0c121c;
+  --line:rgba(148,178,214,0.16);
+  --line-strong:rgba(148,178,214,0.34);
+  --fg:#e8eef7;
+  --fg-dim:#8fa3bd;
+  --amber:#ffb020;
+  --cyan:#4fd3ff;
+  --green:#3ddc8a;
+  --red:#ff5a52;
+  --violet:#b388ff;
+  --ui:'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --cond:'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--ink);
+  color:var(--fg);
+  font-family:var(--ui);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;color:inherit}
+#stage{position:fixed;inset:0;z-index:0}
+#stage canvas{display:block}
+
+.panel{
+  position:fixed;z-index:10;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:6px;
+  backdrop-filter:blur(14px) saturate(1.2);
+  -webkit-backdrop-filter:blur(14px) saturate(1.2);
+  box-shadow:0 24px 60px rgba(0,0,0,.55);
+}
+
+/* ---------- masthead ---------- */
+#masthead{
+  top:14px;left:14px;display:flex;align-items:stretch;gap:0;padding:0;overflow:hidden;
+}
+.mark{
+  width:46px;display:grid;place-items:center;font-size:20px;
+  background:linear-gradient(160deg,#ffb020,#ff7a1a);
+  color:#13202f;
+}
+.mast-text{padding:8px 16px 8px 14px;border-right:1px solid var(--line)}
+.mast-text h1{font-family:var(--cond);font-size:19px;font-weight:700;letter-spacing:.04em;line-height:1.05}
+.mast-text p{font-size:11px;color:var(--fg-dim);letter-spacing:.02em}
+.mast-clock{padding:8px 16px;display:flex;flex-direction:column;justify-content:center;min-width:112px}
+.mast-clock b{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--cyan)}
+.mast-clock span{font-size:10px;color:var(--fg-dim)}
+
+/* ---------- top bar ---------- */
+#viewbar{
+  top:14px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:3px;padding:5px;
+}
+.chip{
+  background:transparent;border:1px solid transparent;border-radius:3px;
+  color:var(--fg-dim);padding:6px 11px;font-size:12px;font-weight:600;
+  cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,border-color .15s;
+}
+.chip:hover{color:var(--fg);background:rgba(255,255,255,.06)}
+.chip[aria-pressed="true"]{color:#13202f;background:var(--amber);border-color:var(--amber)}
+.chip.time[aria-pressed="true"]{background:var(--cyan)}
+.vr{width:1px;align-self:stretch;background:var(--line);margin:2px 6px}
+.chip:focus-visible,.cmd:focus-visible,.crisis-btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* ---------- left console ---------- */
+#console{
+  top:74px;left:14px;width:325px;padding:14px;
+  max-height:calc(100dvh - 92px);overflow-y:auto;overscroll-behavior:contain;
+}
+#console::-webkit-scrollbar{width:5px}
+#console::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+
+.hd{
+  display:flex;align-items:baseline;justify-content:space-between;
+  font-family:var(--cond);font-size:13px;font-weight:700;letter-spacing:.06em;
+  padding-bottom:7px;margin-bottom:10px;border-bottom:1px solid var(--line);
+}
+.hd i{font-style:normal;font-size:10px;font-weight:500;color:var(--fg-dim);font-family:var(--mono)}
+
+.crisis-btn{
+  width:100%;display:flex;align-items:center;gap:11px;padding:12px 13px;cursor:pointer;
+  border:1px solid rgba(255,90,82,.5);border-radius:4px;
+  background:linear-gradient(120deg,rgba(255,90,82,.22),rgba(255,176,32,.14));
+  text-align:left;transition:border-color .15s,background .15s;
+}
+.crisis-btn:hover{border-color:var(--red);background:linear-gradient(120deg,rgba(255,90,82,.34),rgba(255,176,32,.2))}
+.crisis-btn .glyph{
+  width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:rgba(255,90,82,.2);border:1px solid rgba(255,90,82,.55);font-size:15px;
+}
+.crisis-btn b{display:block;font-family:var(--cond);font-size:15px;letter-spacing:.03em}
+.crisis-btn span{display:block;font-size:11px;color:var(--fg-dim);margin-top:1px}
+.crisis-btn[data-running="true"] .glyph{animation:throb 1s infinite}
+@keyframes throb{50%{background:rgba(255,90,82,.6);box-shadow:0 0 14px rgba(255,90,82,.7)}}
+
+#crisis-track{display:none;margin-top:9px;padding:10px 11px;border:1px solid rgba(255,90,82,.32);border-radius:4px;background:rgba(255,90,82,.07)}
+#crisis-track .ct-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#crisis-track b{font-family:var(--cond);font-size:13.5px;letter-spacing:.03em}
+#crisis-track em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--fg-dim)}
+#crisis-track p{font-size:11.5px;color:#ffd0cc;margin-top:5px;line-height:1.45}
+.bar{height:3px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:9px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--red);transition:width .25s linear}
+.ct-steps{display:flex;gap:4px;margin-top:8px}
+.ct-steps i{flex:1;height:2px;background:rgba(255,255,255,.13);border-radius:2px}
+.ct-steps i.on{background:var(--amber)}
+
+.state{margin:12px 0;padding:11px 12px;border-left:3px solid var(--green);background:rgba(61,220,138,.08);font-size:12px;line-height:1.5;color:#c8f5de;border-radius:0 4px 4px 0}
+.state b{font-family:var(--cond);letter-spacing:.03em;font-size:13px;display:block;margin-bottom:2px}
+.state[data-tone="warn"]{border-color:var(--amber);background:rgba(255,176,32,.09);color:#ffe2ad}
+.state[data-tone="crit"]{border-color:var(--red);background:rgba(255,90,82,.1);color:#ffc8c4}
+.state[data-tone="ai"]{border-color:var(--violet);background:rgba(179,136,255,.1);color:#e2d4ff}
+
+.cmds{display:grid;gap:5px}
+.cmd{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 11px;cursor:pointer;text-align:left;
+  border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.025);
+  font-size:12.5px;font-weight:500;transition:background .15s,border-color .15s;
+}
+.cmd:hover{background:rgba(79,211,255,.1);border-color:var(--line-strong)}
+.cmd[aria-pressed="true"]{border-color:var(--cyan);background:rgba(79,211,255,.13)}
+.cmd small{font-family:var(--mono);font-size:10px;color:var(--fg-dim);white-space:nowrap}
+.cmd.ai{border-color:rgba(179,136,255,.45);background:rgba(179,136,255,.12)}
+.cmd.ai:hover{background:rgba(179,136,255,.2)}
+.cmd.fix{border-color:rgba(61,220,138,.45);background:rgba(61,220,138,.12)}
+.cmd.fix:hover{background:rgba(61,220,138,.2)}
+
+#advice{display:none;margin-top:10px;padding:11px 12px;border:1px solid rgba(179,136,255,.35);border-radius:4px;background:rgba(88,52,160,.16);font-size:11.5px;line-height:1.55;color:#e6dbff}
+#advice b{font-family:var(--cond);font-size:12.5px;letter-spacing:.04em;display:block;margin-bottom:4px;color:#d6c2ff}
+#advice ul{margin:6px 0 0 14px}
+#advice li{margin-bottom:3px}
+
+/* ---------- right telemetry ---------- */
+#telemetry{top:74px;right:14px;width:320px;padding:14px;max-height:calc(100dvh - 92px);overflow-y:auto}
+#telemetry::-webkit-scrollbar{width:5px}
+#telemetry::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+.gauges{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.g{background:var(--panel-solid);padding:9px 10px}
+.g.wide{grid-column:span 2;display:flex;align-items:center;justify-content:space-between}
+.g label{display:block;font-size:10.5px;color:var(--fg-dim);letter-spacing:.03em}
+.g output{display:block;font-family:var(--mono);font-size:17px;font-weight:600;margin-top:2px;letter-spacing:-.01em}
+.g em{display:block;font-style:normal;font-family:var(--mono);font-size:9.5px;color:#5c6f88;margin-top:1px}
+.pill{font-family:var(--cond);font-size:12px;font-weight:700;letter-spacing:.07em;padding:4px 9px;border-radius:2px;background:rgba(61,220,138,.16);color:var(--green)}
+.trace{width:100%;height:60px;display:block;margin-top:8px;border:1px solid var(--line);background:rgba(0,0,0,.35);border-radius:3px}
+.trace-label{display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-top:5px;font-family:var(--mono)}
+
+/* ---------- forecast box (60-minute lookahead) ---------- */
+#forecast-box{
+  margin-top:12px;padding:11px 12px;border:1px solid var(--line-strong);border-radius:4px;
+  background:rgba(7,17,31,.75);
+}
+.fc-head{
+  display:flex;align-items:center;justify-content:space-between;
+  font-family:var(--cond);font-size:12px;font-weight:700;letter-spacing:.07em;
+  color:var(--cyan);text-transform:uppercase;margin-bottom:8px;
+}
+.fc-badge{font-size:9.5px;font-family:var(--mono);color:var(--fg-dim);background:rgba(255,255,255,.07);padding:2px 6px;border-radius:2px}
+.fc-grid{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:11px}
+.fc-row{display:contents}
+.fc-label{color:var(--fg-dim)}
+.fc-trend{font-family:var(--mono);font-weight:600;text-align:right}
+.fc-trend.up{color:#ffb020}
+.fc-trend.up-high{color:#ff5a52}
+.fc-trend.down{color:#4fd3ff}
+.fc-trend.down-low{color:#ff5a52}
+.fc-trend.stable{color:#3ddc8a}
+.fc-callout{
+  margin-top:9px;padding:8px 9px;border-radius:3px;font-size:11px;line-height:1.45;
+  border-left:3px solid var(--amber);background:rgba(255,176,32,.1);color:#ffe4b3;
+}
+.fc-callout.crit{border-color:var(--red);background:rgba(255,90,82,.12);color:#ffc4bf}
+.fc-callout.good{border-color:var(--green);background:rgba(61,220,138,.1);color:#c5f5dd}
+
+/* ---------- log ---------- */
+#log{left:14px;bottom:14px;width:325px;padding:11px 13px 8px}
+#log-list{max-height:115px;overflow-y:auto;font-family:var(--mono);font-size:10.5px;line-height:1.6}
+#log-list::-webkit-scrollbar{width:4px}
+#log-list::-webkit-scrollbar-thumb{background:var(--line-strong)}
+#log-list div{display:flex;gap:8px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+#log-list time{color:#5c6f88;flex:none}
+.lv-ok{color:#9fdfbd}.lv-warn{color:#ffd18a}.lv-crit{color:#ff9d97}.lv-ai{color:#d8c5ff}
+
+/* ---------- structured asset inspector ---------- */
+#inspect{
+  right:14px;bottom:14px;width:345px;padding:15px;display:none;
+  border-color:rgba(79,211,255,.4);box-shadow:0 24px 60px rgba(0,0,0,.75), 0 0 25px rgba(79,211,255,.1);
+}
+#inspect .x{position:absolute;top:9px;right:11px;background:none;border:0;cursor:pointer;color:var(--fg-dim);font-size:15px;line-height:1}
+#inspect h3{font-family:var(--cond);font-size:17px;letter-spacing:.03em;color:var(--cyan);padding-right:20px}
+#inspect .i-badge{display:inline-block;margin:3px 0 6px;padding:2px 7px;font-size:10px;font-family:var(--mono);border-radius:2px;background:rgba(79,211,255,.15);color:var(--cyan);font-weight:600}
+#inspect p{font-size:11.5px;color:#a9bcd4;line-height:1.45;margin:4px 0 10px}
+#inspect table{width:100%;border-collapse:collapse;font-size:11px}
+#inspect td{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.06);color:var(--fg-dim)}
+#inspect td+td{text-align:right;font-family:var(--mono);color:var(--fg);font-weight:500}
+.i-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+
+#hint{position:fixed;z-index:30;display:none;padding:5px 10px;font-size:11px;font-weight:500;pointer-events:none;background:rgba(7,11,18,.95);border:1px solid var(--line-strong);border-radius:3px}
+
+#sound{position:fixed;z-index:10;left:14px;bottom:0;display:none}
+
+#boot{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--ink);transition:opacity .6s}
+#boot div{text-align:center}
+#boot b{font-family:var(--cond);font-size:22px;letter-spacing:.08em;display:block}
+#boot span{font-size:12px;color:var(--fg-dim);font-family:var(--mono)}
+
+@media (max-width:1180px){
+  #telemetry{width:275px}
+  #console{width:285px}
+  #log{display:none}
+}
+@media (max-width:900px){
+  #viewbar{top:auto;bottom:10px;max-width:96vw;overflow-x:auto;justify-content:flex-start}
+  #console{top:64px;left:8px;right:8px;width:auto;max-height:44dvh}
+  #telemetry{top:auto;bottom:62px;left:8px;right:8px;width:auto;max-height:36dvh}
+  #inspect{left:8px;right:8px;width:auto;bottom:62px}
+  #masthead .mast-clock{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<div id="boot"><div><b>WattTheGrid</b><span>building community digital twin…</span></div></div>
+
+<div class="panel" id="masthead">
+  <div class="mark">⚡</div>
+  <div class="mast-text">
+    <h1>WattTheGrid</h1>
+    <p>Riverbend microgrid · live digital twin</p>
+  </div>
+  <div class="mast-clock"><b id="clock">12:40:08</b><span id="clock-label">Local grid time</span></div>
+</div>
+
+<div class="panel" id="viewbar">
+  <button class="chip" data-view="overview" aria-pressed="true">Overview</button>
+  <button class="chip" data-view="transformer" aria-pressed="false">Transformer</button>
+  <button class="chip" data-view="ev" aria-pressed="false">Charging hub</button>
+  <button class="chip" data-view="homes" aria-pressed="false">Homes</button>
+  <button class="chip" data-view="industry" aria-pressed="false">Industry</button>
+  <span class="vr"></span>
+  <button class="chip time" data-time="day" aria-pressed="true">Midday</button>
+  <button class="chip time" data-time="dusk" aria-pressed="false">Dusk</button>
+  <button class="chip time" data-time="night" aria-pressed="false">Night</button>
+  <span class="vr"></span>
+  <button class="chip" id="sound-btn" aria-pressed="true">Sound on</button>
+</div>
+
+<div class="panel" id="console">
+  <div class="hd"><span>Operations</span><i>IEEE 1547</i></div>
+
+  <button class="crisis-btn" id="crisis-btn">
+    <span class="glyph">⚠</span>
+    <span>
+      <b>Simulate a crisis</b>
+      <span id="crisis-sub">Runs a random unplanned event end to end</span>
+    </span>
+  </button>
+
+  <div id="crisis-track">
+    <div class="ct-top"><b id="ct-name">—</b><em id="ct-time">0s</em></div>
+    <p id="ct-phase">—</p>
+    <div class="bar"><i id="ct-bar"></i></div>
+    <div class="ct-steps" id="ct-steps"></div>
+  </div>
+
+  <div class="state" id="state" data-tone="ok">
+    <b>Grid steady</b>
+    Rooftop solar and the community battery are covering demand. No constraints on any feeder.
+  </div>
+
+  <div class="hd" style="margin-top:14px"><span>Force a condition</span><i>manual</i></div>
+  <div class="cmds">
+    <button class="cmd" data-scenario="normal" aria-pressed="true"><span>Baseline day</span><small>58% · 50.00 Hz</small></button>
+    <button class="cmd" data-scenario="ev_surge" aria-pressed="false"><span>Fleet fast charging</span><small>96% · 49.62 Hz</small></button>
+    <button class="cmd" data-scenario="heatwave" aria-pressed="false"><span>Heatwave cooling peak</span><small>92% · 49.74 Hz</small></button>
+    <button class="cmd" data-scenario="solar_drop" aria-pressed="false"><span>Cloud front over solar</span><small>88% · 49.80 Hz</small></button>
+    <button class="cmd" data-scenario="transformer_fault" aria-pressed="false"><span>Transformer running hot</span><small>99% · 49.45 Hz</small></button>
+    <button class="cmd ai" id="btn-advice"><span>Ask the dispatch model</span><small>analyse</small></button>
+    <button class="cmd fix" id="btn-fix"><span>Dispatch mitigation</span><small>V2G + curtail</small></button>
+  </div>
+
+  <div id="advice"></div>
+</div>
+
+<div class="panel" id="telemetry">
+  <div class="hd"><span>Telemetry</span><i>20 ms</i></div>
+  <div class="gauges">
+    <div class="g"><label>Feeder loading</label><output id="m-load">58.2 %</output><em id="m-load-sub">116 / 200 kVA</em></div>
+    <div class="g"><label>Solar output</label><output id="m-solar">240 kW</output><em id="m-irr">940 W/m²</em></div>
+    <div class="g"><label>Transformer oil</label><output id="m-temp">48.3 °C</output><em>trip at 105 °C</em></div>
+    <div class="g"><label>Frequency</label><output id="m-freq">50.01 Hz</output><em>nominal 50.00</em></div>
+    <div class="g"><label>Voltage</label><output id="m-volt">230.8 V</output><em>±6% band</em></div>
+    <div class="g"><label>Power factor</label><output id="m-pf">0.98</output><em>lagging</em></div>
+    <div class="g"><label>Battery charge</label><output id="m-soc">78 %</output><em id="m-bat">+14 kW charging</em></div>
+    <div class="g"><label>Charging hub</label><output id="m-ev">35 kW</output><em id="m-ev-sub">3 vehicles</em></div>
+    <div class="g wide"><div><label>Feeder condition</label><output id="m-hdr" style="font-size:13.5px">All feeders within limits</output></div><span class="pill" id="m-pill">STEADY</span></div>
+  </div>
+
+  <!-- FORECAST MODE: Next 60 Minutes Lookahead -->
+  <div id="forecast-box">
+    <div class="fc-head">
+      <span>Next 60 Minutes</span>
+      <span class="fc-badge">PREDICTIVE AI</span>
+    </div>
+    <div class="fc-grid">
+      <div class="fc-row"><span class="fc-label">Solar</span><span class="fc-trend down" id="fc-solar">↓ 195 kW</span></div>
+      <div class="fc-row"><span class="fc-label">Demand</span><span class="fc-trend up" id="fc-demand">↑ 124 kW</span></div>
+      <div class="fc-row"><span class="fc-label">EV charging</span><span class="fc-trend up" id="fc-ev">↑↑ 75 kW</span></div>
+      <div class="fc-row"><span class="fc-label">Battery SOC</span><span class="fc-trend down" id="fc-soc">↓ 68 %</span></div>
+      <div class="fc-row"><span class="fc-label">Grid utilization</span><span class="fc-trend" id="fc-util">64.5 %</span></div>
+    </div>
+    <div class="fc-callout" id="fc-callout">
+      Potential grid stress in approximately 35 min.
+    </div>
+  </div>
+
+  <canvas class="trace" id="trace-load"></canvas>
+  <div class="trace-label"><span>Loading, last 90 s</span><span id="trace-load-v">58.2%</span></div>
+
+  <canvas class="trace" id="trace-freq"></canvas>
+  <div class="trace-label"><span>Frequency deviation</span><span id="trace-freq-v">50.01 Hz</span></div>
+</div>
+
+<div class="panel" id="log">
+  <div class="hd"><span>Event log</span><i id="log-count">0</i></div>
+  <div id="log-list"></div>
+</div>
+
+<!-- Structured Digital Twin Asset Inspector -->
+<div class="panel" id="inspect">
+  <button class="x" id="inspect-x" aria-label="Close">✕</button>
+  <h3 id="i-title">Transformer</h3>
+  <span class="i-badge" id="i-id">TR-402-B</span>
+  <p id="i-desc"></p>
+  <table><tbody>
+    <tr><td>Bus / Location</td><td id="i-loc">—</td></tr>
+    <tr><td>Rated Capacity</td><td id="i-cap">—</td></tr>
+    <tr><td>Current Load</td><td id="i-load">—</td></tr>
+    <tr><td>Local Generation</td><td id="i-gen">—</td></tr>
+    <tr><td>Power Factor</td><td id="i-pf">—</td></tr>
+    <tr><td>Flexibility</td><td id="i-flex">—</td></tr>
+    <tr><td>Operating State</td><td id="i-state">—</td></tr>
+    <tr><td>Health Index</td><td id="i-health">—</td></tr>
+  </tbody></table>
+</div>
+
+<div id="hint"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   0. SMALL HELPERS
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const clamp = (v,a,b) => Math.min(b,Math.max(a,v));
+const lerp = (a,b,t) => a + (b-a)*t;
+const rnd = (a,b) => a + Math.random()*(b-a);
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+function canvas2d(w,h){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+
+/* ============================================================
+   1. AUDIO — synthesised control-room feedback
+   ============================================================ */
+const Audio_ = {
+  ctx:null, on:true, humGain:null,
+  init(){
+    if(this.ctx) return;
+    try{ this.ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    const osc = this.ctx.createOscillator(), osc2 = this.ctx.createOscillator();
+    const g = this.ctx.createGain(), f = this.ctx.createBiquadFilter();
+    osc.type='sine'; osc.frequency.value=50;
+    osc2.type='triangle'; osc2.frequency.value=100;
+    f.type='lowpass'; f.frequency.value=260;
+    g.gain.value=0.0;
+    osc.connect(f); osc2.connect(f); f.connect(g); g.connect(this.ctx.destination);
+    osc.start(); osc2.start();
+    this.humGain = g;
+  },
+  resume(){ this.init(); if(this.ctx && this.ctx.state==='suspended') this.ctx.resume(); },
+  hum(level){ if(!this.humGain||!this.ctx) return; this.humGain.gain.setTargetAtTime(this.on?level*0.05:0, this.ctx.currentTime, .4); },
+  beep(freq=620, dur=.1, type='sine', vol=.05){
+    if(!this.on) return; this.resume(); if(!this.ctx) return;
+    const o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,this.ctx.currentTime);
+    g.gain.setValueAtTime(vol,this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001,this.ctx.currentTime+dur);
+    o.connect(g); g.connect(this.ctx.destination); o.start(); o.stop(this.ctx.currentTime+dur);
+  },
+  alarm(){ this.beep(740,.16,'sawtooth',.045); setTimeout(()=>this.beep(560,.2,'sawtooth',.045),150); },
+  trip(){ this.beep(180,.5,'square',.05); setTimeout(()=>this.beep(120,.7,'square',.04),120); },
+  ok(){ this.beep(720,.09); setTimeout(()=>this.beep(980,.16),100); }
+};
+
+/* ============================================================
+   2. PROCEDURAL TEXTURES
+   ============================================================ */
+const Tex = {
+  _fin(c, rx, ry, srgb){
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(rx||1, ry||1);
+    t.anisotropy = 8;
+    if(srgb !== false) t.encoding = THREE.sRGBEncoding;
+    return t;
+  },
+  grain(ctx,w,h,n,lo,hi,alpha){
+    for(let i=0;i<n;i++){
+      const s = Math.floor(rnd(lo,hi));
+      ctx.fillStyle = `rgba(${s},${s+3},${s+7},${alpha})`;
+      ctx.fillRect(Math.random()*w, Math.random()*h, rnd(1,3), rnd(1,3));
+    }
+  },
+  asphalt(lanes){
+    const [c,x] = canvas2d(1024,1024);
+    x.fillStyle='#22262c'; x.fillRect(0,0,1024,1024);
+    this.grain(x,1024,1024,60000,26,74,.3);
+    for(let i=0;i<7;i++){
+      x.fillStyle=`rgba(${rnd(18,40)|0},${rnd(18,40)|0},${rnd(20,44)|0},.5)`;
+      x.fillRect(rnd(0,900), rnd(0,900), rnd(60,180), rnd(50,160));
+    }
+    for(let i=0;i<40;i++){
+      x.fillStyle='rgba(0,0,0,.12)';
+      x.fillRect(rnd(0,1024), rnd(0,1024), rnd(2,7), rnd(40,260));
+    }
+    if(lanes){
+      x.fillStyle='rgba(232,238,247,.78)';
+      x.fillRect(58,0,10,1024); x.fillRect(956,0,10,1024);
+      x.fillStyle='rgba(255,208,110,.72)';
+      for(let y=0;y<1024;y+=110){ x.fillRect(500,y,8,62); x.fillRect(518,y,8,62); }
+    }
+    return this._fin(c);
+  },
+  grass(){
+    const [c,x] = canvas2d(1024,1024);
+    const g = x.createLinearGradient(0,0,1024,1024);
+    g.addColorStop(0,'#3a5c30'); g.addColorStop(.5,'#2f4f28'); g.addColorStop(1,'#37582c');
+    x.fillStyle=g; x.fillRect(0,0,1024,1024);
+    for(let i=0;i<260;i++){
+      x.fillStyle=`rgba(${rnd(40,92)|0},${rnd(70,130)|0},${rnd(36,72)|0},.3)`;
+      x.beginPath(); x.ellipse(rnd(0,1024),rnd(0,1024),rnd(30,150),rnd(24,110),rnd(0,3),0,7); x.fill();
+    }
+    for(let i=0;i<50000;i++){
+      const s=rnd(.3,1);
+      x.fillStyle=`rgba(${(58*s)|0},${(96*s)|0},${(46*s)|0},.35)`;
+      x.fillRect(Math.random()*1024, Math.random()*1024, 2, 3);
+    }
+    for(let i=0;i<12;i++){
+      x.fillStyle='rgba(112,94,62,.18)';
+      x.beginPath(); x.ellipse(rnd(0,1024),rnd(0,1024),rnd(40,120),rnd(14,40),rnd(0,3),0,7); x.fill();
+    }
+    return this._fin(c,26,26);
+  },
+  concrete(){
+    const [c,x] = canvas2d(512,512);
+    x.fillStyle='#8c8f93'; x.fillRect(0,0,512,512);
+    this.grain(x,512,512,30000,110,165,.22);
+    x.strokeStyle='rgba(50,52,56,.5)'; x.lineWidth=2;
+    for(let i=0;i<=512;i+=128){
+      x.beginPath(); x.moveTo(i,0); x.lineTo(i,512); x.stroke();
+      x.beginPath(); x.moveTo(0,i); x.lineTo(512,i); x.stroke();
+    }
+    for(let i=0;i<18;i++){
+      x.strokeStyle='rgba(60,62,66,.3)'; x.lineWidth=1;
+      x.beginPath(); x.moveTo(rnd(0,512),rnd(0,512));
+      x.lineTo(rnd(0,512),rnd(0,512)); x.stroke();
+    }
+    return this._fin(c,3,3);
+  },
+  gravel(){
+    const [c,x] = canvas2d(512,512);
+    x.fillStyle='#6b6f75'; x.fillRect(0,0,512,512);
+    for(let i=0;i<26000;i++){
+      const s=rnd(80,190)|0;
+      x.fillStyle=`rgba(${s},${s-4},${s-10},.55)`;
+      x.beginPath(); x.arc(rnd(0,512),rnd(0,512),rnd(1.2,3.4),0,7); x.fill();
+    }
+    return this._fin(c,10,10);
+  },
+  roofTile(dark){
+    const [c,x] = canvas2d(512,512);
+    x.fillStyle = dark ? '#3a4150' : '#7c3b2e'; x.fillRect(0,0,512,512);
+    for(let y=0;y<512;y+=26){
+      for(let px=0;px<512;px+=44){
+        const off = (y/26)%2 ? 22 : 0;
+        const v = rnd(-16,16);
+        x.fillStyle = dark ? `rgb(${58+v},${66+v},${80+v})` : `rgb(${132+v},${64+v},${48+v})`;
+        x.fillRect(px+off+1, y+1, 42, 24);
+        x.fillStyle='rgba(0,0,0,.25)';
+        x.fillRect(px+off+1, y+21, 42, 4);
+      }
+    }
+    return this._fin(c,5,5);
+  },
+  stucco(hex){
+    const [c,x] = canvas2d(512,512);
+    x.fillStyle=hex; x.fillRect(0,0,512,512);
+    for(let i=0;i<40000;i++){
+      x.fillStyle=`rgba(255,255,255,${rnd(.02,.09)})`;
+      x.fillRect(Math.random()*512,Math.random()*512,2,2);
+    }
+    for(let i=0;i<20000;i++){
+      x.fillStyle=`rgba(0,0,0,${rnd(.02,.07)})`;
+      x.fillRect(Math.random()*512,Math.random()*512,2,2);
+    }
+    const g = x.createLinearGradient(0,380,0,512);
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(30,26,20,.28)');
+    x.fillStyle=g; x.fillRect(0,380,512,132);
+    return this._fin(c,1,1);
+  },
+  brick(){
+    const [c,x] = canvas2d(512,512);
+    x.fillStyle='#6f4034'; x.fillRect(0,0,512,512);
+    for(let y=0;y<512;y+=20){
+      for(let px=0;px<512;px+=44){
+        const off=(y/20)%2?22:0, v=rnd(-20,18);
+        x.fillStyle=`rgb(${136+v},${68+v},${52+v})`;
+        x.fillRect(px+off+2,y+2,40,16);
+      }
+    }
+    return this._fin(c,4,4);
+  },
+  corrugated(){
+    const [c,x] = canvas2d(512,512);
+    for(let px=0;px<512;px+=16){
+      const g=x.createLinearGradient(px,0,px+16,0);
+      g.addColorStop(0,'#4b5563'); g.addColorStop(.45,'#9aa5b4'); g.addColorStop(.55,'#8b95a4'); g.addColorStop(1,'#414b58');
+      x.fillStyle=g; x.fillRect(px,0,16,512);
+    }
+    for(let i=0;i<30;i++){
+      x.fillStyle=`rgba(${rnd(80,120)|0},${rnd(50,70)|0},${rnd(30,44)|0},${rnd(.05,.16)})`;
+      x.fillRect(rnd(0,512), rnd(300,512), rnd(10,60), rnd(10,120));
+    }
+    x.fillStyle='rgba(20,24,30,.5)'; x.fillRect(0,0,512,10); x.fillRect(0,502,512,10);
+    return this._fin(c,6,3);
+  },
+  solar(){
+    const [c,x] = canvas2d(512,512);
+    x.fillStyle='#0f1c33'; x.fillRect(0,0,512,512);
+    for(let cy=0;cy<512;cy+=128){
+      for(let cx=0;cx<512;cx+=128){
+        const g=x.createLinearGradient(cx,cy,cx+128,cy+128);
+        g.addColorStop(0,'#16294d'); g.addColorStop(.5,'#0d1b36'); g.addColorStop(1,'#1b3157');
+        x.fillStyle=g; x.fillRect(cx+3,cy+3,122,122);
+        x.strokeStyle='rgba(206,220,240,.30)'; x.lineWidth=1.4;
+        for(let i=16;i<128;i+=16){ x.beginPath(); x.moveTo(cx+i,cy+3); x.lineTo(cx+i,cy+125); x.stroke(); }
+        x.strokeStyle='rgba(226,236,250,.6)'; x.lineWidth=3.5;
+        x.beginPath(); x.moveTo(cx+3,cy+42); x.lineTo(cx+125,cy+42); x.stroke();
+        x.beginPath(); x.moveTo(cx+3,cy+86); x.lineTo(cx+125,cy+86); x.stroke();
+      }
+    }
+    x.strokeStyle='#aeb7c4'; x.lineWidth=7; x.strokeRect(3,3,506,506);
+    return this._fin(c);
+  },
+  hazard(){
+    const [c,x] = canvas2d(256,64);
+    x.fillStyle='#e8a41c'; x.fillRect(0,0,256,64);
+    x.fillStyle='#14181f';
+    for(let px=-64;px<256;px+=42){
+      x.beginPath(); x.moveTo(px,0); x.lineTo(px+21,0); x.lineTo(px+53,64); x.lineTo(px+32,64); x.closePath(); x.fill();
+    }
+    x.fillStyle='rgba(0,0,0,.18)'; x.fillRect(0,54,256,10);
+    return this._fin(c,10,1);
+  },
+  glow(){
+    const [c,x] = canvas2d(128,128);
+    const g = x.createRadialGradient(64,64,0,64,64,64);
+    g.addColorStop(0,'rgba(255,255,255,1)');
+    g.addColorStop(.25,'rgba(255,255,255,.65)');
+    g.addColorStop(.6,'rgba(255,255,255,.14)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=g; x.fillRect(0,0,128,128);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  },
+  smoke(){
+    const [c,x] = canvas2d(128,128);
+    const g = x.createRadialGradient(64,64,4,64,64,62);
+    g.addColorStop(0,'rgba(220,224,230,.85)');
+    g.addColorStop(.5,'rgba(190,196,206,.32)');
+    g.addColorStop(1,'rgba(170,176,186,0)');
+    x.fillStyle=g; x.fillRect(0,0,128,128);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  },
+  sky(top, horizon, ground, sunColor, sunY){
+    const [c,x] = canvas2d(1024,512);
+    const g = x.createLinearGradient(0,0,0,512);
+    g.addColorStop(0, top);
+    g.addColorStop(.42, horizon);
+    g.addColorStop(.5, horizon);
+    g.addColorStop(.52, ground);
+    g.addColorStop(1, ground);
+    x.fillStyle=g; x.fillRect(0,0,1024,512);
+    const sg = x.createRadialGradient(330, sunY, 0, 330, sunY, 250);
+    sg.addColorStop(0, sunColor);
+    sg.addColorStop(.12, sunColor.replace(/[\d.]+\)$/, '.55)'));
+    sg.addColorStop(1, sunColor.replace(/[\d.]+\)$/, '0)'));
+    x.fillStyle=sg; x.fillRect(0,0,1024,300);
+    for(let i=0;i<26;i++){
+      x.fillStyle=`rgba(255,255,255,${rnd(.02,.07)})`;
+      x.beginPath(); x.ellipse(rnd(0,1024), rnd(60,225), rnd(90,300), rnd(9,30), 0,0,7); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+};
+
+/* ============================================================
+   3. RENDERER / SCENE
+   ============================================================ */
+const stage = $('#stage');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, .5, 900);
+camera.position.set(62, 44, 74);
+
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.85));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = .06;
+controls.minDistance = 14;
+controls.maxDistance = 220;
+controls.maxPolarAngle = Math.PI/2.12;
+controls.target.set(0,3,0);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+
+/* lights */
+const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
+sun.position.set(58, 78, 42);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near = 8;
+sun.shadow.camera.far = 260;
+const SD = 70;
+sun.shadow.camera.left=-SD; sun.shadow.camera.right=SD;
+sun.shadow.camera.top=SD; sun.shadow.camera.bottom=-SD;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.035;
+scene.add(sun, sun.target);
+
+const hemi = new THREE.HemisphereLight(0xbcd7ff, 0x3a4030, .55);
+scene.add(hemi);
+
+const faultLight = new THREE.PointLight(0xff3b30, 0, 46, 2);
+faultLight.position.set(24, 8, 24);
+scene.add(faultLight);
+
+/* stars for night */
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(900*3);
+for(let i=0;i<900;i++){
+  const v = new THREE.Vector3().setFromSphericalCoords(400, Math.acos(rnd(0,.95)), rnd(0,Math.PI*2));
+  starPos[i*3]=v.x; starPos[i*3+1]=Math.abs(v.y)+12; starPos[i*3+2]=v.z;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos,3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+  color:0xdfe9ff, size:1.5, sizeAttenuation:true, transparent:true, opacity:0, depthWrite:false
+}));
+scene.add(stars);
+
+/* ============================================================
+   4. MATERIALS
+   ============================================================ */
+const glowTex = Tex.glow(), smokeTex = Tex.smoke();
+
+const M = {
+  grass: new THREE.MeshStandardMaterial({map:Tex.grass(), roughness:1, metalness:0}),
+  road: new THREE.MeshStandardMaterial({map:Tex.asphalt(true), roughness:.82, metalness:.04}),
+  roadPlain: new THREE.MeshStandardMaterial({map:Tex.asphalt(false), roughness:.85, metalness:.04}),
+  concrete: new THREE.MeshStandardMaterial({map:Tex.concrete(), roughness:.92}),
+  kerb: new THREE.MeshStandardMaterial({color:0xb9bec6, roughness:.9}),
+  gravel: new THREE.MeshStandardMaterial({map:Tex.gravel(), roughness:1}),
+  solar: new THREE.MeshStandardMaterial({map:Tex.solar(), roughness:.14, metalness:.72, envMapIntensity:1.4}),
+  corrugated: new THREE.MeshStandardMaterial({map:Tex.corrugated(), roughness:.52, metalness:.62}),
+  brick: new THREE.MeshStandardMaterial({map:Tex.brick(), roughness:.95}),
+  steel: new THREE.MeshStandardMaterial({color:0xa9b2bd, roughness:.34, metalness:.92, envMapIntensity:1.1}),
+  steelDark: new THREE.MeshStandardMaterial({color:0x4d5561, roughness:.42, metalness:.8}),
+  paintedGrey: new THREE.MeshStandardMaterial({color:0x7d858f, roughness:.55, metalness:.45}),
+  porcelain: new THREE.MeshStandardMaterial({color:0x8a6a52, roughness:.18, metalness:.05, envMapIntensity:1.3}),
+  copper: new THREE.MeshStandardMaterial({color:0xb87333, roughness:.3, metalness:.95}),
+  hazard: new THREE.MeshStandardMaterial({map:Tex.hazard(), roughness:.7}),
+  wallA: new THREE.MeshStandardMaterial({map:Tex.stucco('#e6e2d8'), roughness:.86}),
+  wallB: new THREE.MeshStandardMaterial({map:Tex.stucco('#cfd6d9'), roughness:.86}),
+  wallC: new THREE.MeshStandardMaterial({map:Tex.stucco('#d8c4a8'), roughness:.88}),
+  roofA: new THREE.MeshStandardMaterial({map:Tex.roofTile(false), roughness:.82}),
+  roofB: new THREE.MeshStandardMaterial({map:Tex.roofTile(true), roughness:.8}),
+  trim: new THREE.MeshStandardMaterial({color:0x2e3742, roughness:.6}),
+  wood: new THREE.MeshStandardMaterial({color:0x6b4a2f, roughness:.9}),
+  glass: new THREE.MeshStandardMaterial({color:0x1c2b3a, roughness:.06, metalness:1, envMapIntensity:1.8}),
+  cable: new THREE.MeshStandardMaterial({color:0x14181f, roughness:.75, metalness:.2}),
+  leafA: new THREE.MeshStandardMaterial({color:0x3f7a35, roughness:.95, flatShading:true}),
+  leafB: new THREE.MeshStandardMaterial({color:0x35682e, roughness:.95, flatShading:true}),
+  leafC: new THREE.MeshStandardMaterial({color:0x4f8a3c, roughness:.95, flatShading:true}),
+  bark: new THREE.MeshStandardMaterial({color:0x4a3626, roughness:.98}),
+  hedge: new THREE.MeshStandardMaterial({color:0x2f5c2a, roughness:1, flatShading:true}),
+  // emissive / switchable
+  homeWindow: new THREE.MeshStandardMaterial({color:0x223243, roughness:.08, metalness:.9, emissive:0xffbe63, emissiveIntensity:0, envMapIntensity:1.6}),
+  worksWindow: new THREE.MeshStandardMaterial({color:0x1d2a38, roughness:.1, metalness:.85, emissive:0xbfe6ff, emissiveIntensity:0}),
+  lamp: new THREE.MeshStandardMaterial({color:0x2a3038, emissive:0xffd79a, emissiveIntensity:0}),
+  screen: new THREE.MeshStandardMaterial({color:0x0b1622, emissive:0x35c8ff, emissiveIntensity:1.6}),
+  statusGood: new THREE.MeshStandardMaterial({color:0x0a1a12, emissive:0x2bff92, emissiveIntensity:2.2}),
+  beacon: new THREE.MeshStandardMaterial({color:0x2a0a08, emissive:0xff3b30, emissiveIntensity:2.4}),
+  headlamp: new THREE.MeshStandardMaterial({color:0x101418, emissive:0xfff2d0, emissiveIntensity:0}),
+  taillamp: new THREE.MeshStandardMaterial({color:0x1a0605, emissive:0xff2a1a, emissiveIntensity:.7}),
+  // Highlight aura for subtle visual state reactions
+  highlightAura: new THREE.MeshBasicMaterial({color:0x3ddc8a, transparent:true, opacity:0.18, side:THREE.BackSide})
+};
+
+/* ============================================================
+   5. UNIFIED STRUCTURED DIGITAL TWIN ASSET REGISTRY
+   ============================================================ */
+const world = new THREE.Group();
+scene.add(world);
+
+const inspectables = [];
+const AssetRegistry = {};
+
+function registerDigitalAsset(mesh, assetConfig){
+  AssetRegistry[assetConfig.id] = assetConfig;
+  mesh.userData.assetId = assetConfig.id;
+  inspectables.push(mesh);
+  return mesh;
+}
+
+function addShadow(m){ m.castShadow = true; m.receiveShadow = true; return m; }
+
+/* -- terrain -- */
+const terrain = new THREE.Mesh(new THREE.PlaneGeometry(420,420,1,1), M.grass);
+terrain.rotation.x = -Math.PI/2;
+terrain.receiveShadow = true;
+world.add(terrain);
+
+/* -- roads -- */
+function road(x,z,w,l,plain){
+  const g = new THREE.Group();
+  const mat = plain ? M.roadPlain : M.road;
+  const surf = new THREE.Mesh(new THREE.BoxGeometry(w,.3,l), mat.clone());
+  if(l>w){ surf.material.map = mat.map.clone(); surf.material.map.repeat.set(1, l/w*1.1); }
+  else { surf.material.map = mat.map.clone(); surf.material.map.rotation = Math.PI/2; surf.material.map.center.set(.5,.5); surf.material.map.repeat.set(1, w/l*1.1); }
+  surf.material.map.needsUpdate = true;
+  surf.material.needsUpdate = true;
+  surf.position.set(x,.15,z);
+  surf.receiveShadow = true;
+  g.add(surf);
+
+  const kerbW = .7, kerbH = .45;
+  if(l>=w){
+    for(const s of [-1,1]){
+      const k = new THREE.Mesh(new THREE.BoxGeometry(kerbW,kerbH,l), M.kerb);
+      k.position.set(x + s*(w/2+kerbW/2), kerbH/2, z); k.receiveShadow=true; g.add(k);
+      const pave = new THREE.Mesh(new THREE.BoxGeometry(3.4,.34,l), M.concrete);
+      pave.position.set(x + s*(w/2+kerbW+1.7), .17, z); pave.receiveShadow=true; g.add(pave);
+    }
+  } else {
+    for(const s of [-1,1]){
+      const k = new THREE.Mesh(new THREE.BoxGeometry(w,kerbH,kerbW), M.kerb);
+      k.position.set(x, kerbH/2, z + s*(l/2+kerbW/2)); k.receiveShadow=true; g.add(k);
+      const pave = new THREE.Mesh(new THREE.BoxGeometry(w,.34,3.4), M.concrete);
+      pave.position.set(x, .17, z + s*(l/2+kerbW+1.7)); pave.receiveShadow=true; g.add(pave);
+    }
+  }
+  world.add(g);
+}
+const RING_OUT = 21, ISLAND_R = 15;
+const streetLamps = [];
+road(0, 58, 12, 74);
+road(0, -58, 12, 74);
+road(58, 0, 74, 12);
+road(-58, 0, 74, 12);
+
+/* ---------- central roundabout + microgrid control hub ---------- */
+const hubParts = {beacon:null, halo:null, bus:null, glowRings:[], lamps:[], screens:[]};
+(function roundabout(){
+  const ringRoad = new THREE.Mesh(new THREE.CylinderGeometry(RING_OUT, RING_OUT, .3, 96), M.roadPlain);
+  ringRoad.position.y = .15; ringRoad.receiveShadow = true; world.add(ringRoad);
+
+  const kerbOut = new THREE.Mesh(new THREE.TorusGeometry(RING_OUT+.35,.36,8,96), M.kerb);
+  kerbOut.rotation.x = Math.PI/2; kerbOut.position.y = .36; world.add(kerbOut);
+
+  const paint = new THREE.MeshStandardMaterial({color:0xe9eef5, roughness:.8});
+  for(let i=0;i<72;i++){
+    const a = i/72*Math.PI*2;
+    const d = new THREE.Mesh(new THREE.BoxGeometry(1.2,.02,.16), paint);
+    d.position.set(Math.cos(a)*18, .31, Math.sin(a)*18);
+    d.rotation.y = -a;
+    world.add(d);
+  }
+  for(let q=0;q<4;q++){
+    const a = q*Math.PI/2;
+    const ux = Math.cos(a), uz = Math.sin(a);
+    for(let i=-4.5;i<=4.5;i+=1.8){
+      const z = new THREE.Mesh(new THREE.BoxGeometry(1.1,.02,3.4), paint);
+      z.position.set(ux*24 - uz*i, .32, uz*24 + ux*i);
+      z.rotation.y = -a;
+      world.add(z);
+    }
+  }
+
+  const islandMat = new THREE.MeshStandardMaterial({map: Tex.grass(), roughness:1});
+  islandMat.map.repeat.set(5,5);
+  const island = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R, ISLAND_R+.5, 1.0, 72), islandMat);
+  island.position.y = .5; island.receiveShadow = true; world.add(island);
+  const kerbIn = new THREE.Mesh(new THREE.TorusGeometry(ISLAND_R+.15,.38,8,72), M.kerb);
+  kerbIn.rotation.x = Math.PI/2; kerbIn.position.y = .95; world.add(kerbIn);
+
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(9.6,10,.5,64), M.concrete);
+  plinth.position.y = 1.2; plinth.receiveShadow = true; world.add(plinth);
+  const safety = new THREE.Mesh(new THREE.TorusGeometry(9.7,.18,8,64), M.hazard);
+  safety.rotation.x = Math.PI/2; safety.position.y = 1.48; world.add(safety);
+
+  const core = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(4.6,4.9,5.6,32), M.paintedGrey));
+  core.position.y = 4.25; world.add(core);
+
+  registerDigitalAsset(core, {
+    id: 'HUB-RMU-00',
+    name: 'Central Microgrid Control Hub',
+    type: 'Ring Main Switchgear & Automation Unit',
+    location: 'Central Junction (Bus-0)',
+    desc: 'The ring main unit at the centre of Riverbend. Every feeder — transformer, homes, industry and the charging hub — lands on this busbar to re-route energy around constraints in milliseconds.',
+    rating: '4 × 200 A automated feeders (415 V)',
+    getLive: (s) => ({
+      load: (s.load * 1.95).toFixed(1) + ' kVA active throughput',
+      gen: (s.solar + s.wind).toFixed(0) + ' kW total microgrid export',
+      pf: s.pf.toFixed(2) + ' (central compensated)',
+      flex: '4 feeders isolatable / auto-reclose',
+      state: s.load > 90 ? 'High Throughput Constraint' : 'Nominal Closed Ring',
+      health: s.load > 95 ? '92 / 100 (Thermal Warning)' : '99 / 100 (Optimal)'
+    })
+  });
+
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(4.68,4.68,1.5,32), M.worksWindow);
+  band.position.y = 5.6; world.add(band);
+  const roofSlab = new THREE.Mesh(new THREE.CylinderGeometry(5.5,5.5,.45,32), M.trim);
+  roofSlab.position.y = 7.25; roofSlab.castShadow = true; world.add(roofSlab);
+  const parapet = new THREE.Mesh(new THREE.TorusGeometry(5.4,.12,8,40), M.steel);
+  parapet.rotation.x = Math.PI/2; parapet.position.y = 7.6; world.add(parapet);
+
+  const bus = new THREE.Mesh(new THREE.TorusGeometry(7.4,.16,10,72), M.copper);
+  bus.rotation.x = Math.PI/2; bus.position.y = 8.4; bus.castShadow = true; world.add(bus);
+  hubParts.bus = bus;
+  for(let i=0;i<8;i++){
+    const a = i/8*Math.PI*2;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(.16,.2,2.2,10), M.porcelain);
+    post.position.set(Math.cos(a)*7.4, 7.3, Math.sin(a)*7.4); post.castShadow = true; world.add(post);
+    const stub = new THREE.Mesh(new THREE.CylinderGeometry(.14,.18,4.6,8), M.steel);
+    stub.position.set(Math.cos(a)*7.4, 4.0, Math.sin(a)*7.4); world.add(stub);
+  }
+
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(.24,.36,9.5,12), M.steel);
+  mast.position.y = 11.6; mast.castShadow = true; world.add(mast);
+  for(let i=0;i<4;i++){
+    const a = i*Math.PI/2 + Math.PI/4;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(3.2,.2,.2), M.steel);
+    arm.position.set(Math.cos(a)*1.4, 15.4, Math.sin(a)*1.4);
+    arm.rotation.y = -a; world.add(arm);
+    const ins = new THREE.Mesh(new THREE.CylinderGeometry(.15,.18,.5,10), M.porcelain);
+    ins.position.set(Math.cos(a)*2.9, 15.1, Math.sin(a)*2.9); world.add(ins);
+  }
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(.34,14,12), M.beacon.clone());
+  beacon.position.y = 16.6; world.add(beacon);
+  hubParts.beacon = beacon;
+
+  for(const r of [9.9, 10.5]){
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(r,.09,8,96),
+      new THREE.MeshBasicMaterial({color:0x4fd3ff, transparent:true, opacity:.8, blending:THREE.AdditiveBlending, depthWrite:false}));
+    halo.rotation.x = Math.PI/2; halo.position.y = 1.55; world.add(halo);
+    hubParts.glowRings.push(halo);
+  }
+  const groundGlow = new THREE.Mesh(new THREE.CircleGeometry(11,48),
+    new THREE.MeshBasicMaterial({map:glowTex, color:0x4fd3ff, transparent:true, opacity:.28, blending:THREE.AdditiveBlending, depthWrite:false}));
+  groundGlow.rotation.x = -Math.PI/2; groundGlow.position.y = 1.5; world.add(groundGlow);
+  hubParts.halo = groundGlow;
+
+  for(let i=0;i<6;i++){
+    const a = i/6*Math.PI*2 + .3;
+    const cab = addShadow(new THREE.Mesh(new THREE.BoxGeometry(1.7,2.3,1.2), M.steelDark));
+    cab.position.set(Math.cos(a)*8.4, 2.6, Math.sin(a)*8.4);
+    cab.rotation.y = -a; world.add(cab);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.6,.42), M.screen.clone());
+    scr.position.set(Math.cos(a)*(8.4-.63), 3.1, Math.sin(a)*(8.4-.63));
+    scr.rotation.y = -a + Math.PI/2;
+    scr.lookAt(0,3.1,0);
+    world.add(scr);
+    hubParts.screens.push(scr.material);
+  }
+
+  for(let i=0;i<8;i++){
+    const a = i/8*Math.PI*2 + .4;
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(.09,.13,5.4,8), M.paintedGrey);
+    col.position.set(Math.cos(a)*12.6, 2.7, Math.sin(a)*12.6); col.castShadow = true; world.add(col);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(.34,12,10), M.lamp);
+    lamp.position.set(Math.cos(a)*12.6, 5.6, Math.sin(a)*12.6); world.add(lamp);
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(3.2,20),
+      new THREE.MeshBasicMaterial({map:glowTex, color:0xffc978, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending}));
+    pool.rotation.x = -Math.PI/2;
+    pool.position.set(Math.cos(a)*12.6, 1.55, Math.sin(a)*12.6);
+    world.add(pool);
+    streetLamps.push({cone:null, pool});
+  }
+
+  for(let i=0;i<14;i++){
+    const a = i/14*Math.PI*2 + .18;
+    const r = rnd(11.4,14.2);
+    const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(rnd(.7,1.3),0), M.hedge);
+    bush.position.set(Math.cos(a)*r, 1.2, Math.sin(a)*r);
+    bush.rotation.set(rnd(0,3),rnd(0,3),rnd(0,3));
+    bush.castShadow = true; world.add(bush);
+  }
+})();
+
+/* -- vegetation -- */
+function tree(x,z,scale){
+  const near = Math.hypot(x,z) < 74;
+  const g = new THREE.Group();
+  const h = rnd(3.4,5.2);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.16,.3,h,7), M.bark);
+  trunk.position.y = h/2; trunk.castShadow = near; g.add(trunk);
+  const leafMat = pick([M.leafA,M.leafB,M.leafC]);
+  const blobs = near ? 3 + Math.floor(Math.random()*3) : 2;
+  for(let i=0;i<blobs;i++){
+    const r = rnd(1.1,2.0);
+    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(r,0), leafMat);
+    b.position.set(rnd(-1,1), h + rnd(-.2,1.9), rnd(-1,1));
+    b.rotation.set(rnd(0,3),rnd(0,3),rnd(0,3));
+    b.scale.y = rnd(.7,1.05);
+    b.castShadow = near;
+    g.add(b);
+  }
+  g.position.set(x,0,z);
+  g.scale.setScalar(scale||rnd(.8,1.25));
+  world.add(g);
+  return g;
+}
+function pine(x,z){
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.14,.24,2,6), M.bark);
+  trunk.position.y=1; g.add(trunk);
+  for(let i=0;i<3;i++){
+    const c = new THREE.Mesh(new THREE.ConeGeometry(2.0-i*.45, 2.6, 7), M.leafB);
+    c.position.y = 2.2 + i*1.5; c.castShadow = true; g.add(c);
+  }
+  g.position.set(x,0,z); g.scale.setScalar(rnd(.8,1.3));
+  world.add(g);
+}
+(function scatterVeg(){
+  for(let t=-84;t<=84;t+=13){
+    if(Math.abs(t)<27) continue;
+    for(const s of [-1,1]){
+      tree(s*10.6, t + rnd(-1,1), rnd(.85,1.05));
+      tree(t + rnd(-1,1), s*10.6, rnd(.85,1.05));
+    }
+  }
+  for(let i=0;i<95;i++){
+    const x = rnd(-180,180), z = rnd(-180,180);
+    if(Math.abs(x)<44 && Math.abs(z)<44) continue;
+    if(Math.hypot(x,z) > 190) continue;
+    Math.random()>.4 ? tree(x,z) : pine(x,z);
+  }
+  for(let i=0;i<40;i++){
+    const x = rnd(-170,170), z = rnd(-170,170);
+    if(Math.abs(x)<48 && Math.abs(z)<48) continue;
+    const h = new THREE.Mesh(new THREE.BoxGeometry(rnd(6,22),1.5,1.4), M.hedge);
+    h.position.set(x,.75,z); h.rotation.y = Math.random()>.5?Math.PI/2:0;
+    h.castShadow = true; world.add(h);
+  }
+})();
+
+/* -- street lighting -- */
+function streetLamp(x,z,rotY){
+  const g = new THREE.Group();
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(.1,.16,8,8), M.paintedGrey);
+  col.position.y=4; col.castShadow=true; g.add(col);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(2.1,.14,.14), M.paintedGrey);
+  arm.position.set(1,7.9,0); g.add(arm);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(1.1,.22,.5), M.steelDark);
+  head.position.set(1.9,7.78,0); g.add(head);
+  const lens = new THREE.Mesh(new THREE.BoxGeometry(.9,.08,.36), M.lamp);
+  lens.position.set(1.9,7.64,0); g.add(lens);
+
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(3.4,7.4,14,1,true),
+    new THREE.MeshBasicMaterial({color:0xffd79a, transparent:true, opacity:0, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending}));
+  cone.position.set(1.9,3.9,0); g.add(cone);
+
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(3.6,20),
+    new THREE.MeshBasicMaterial({map:glowTex, color:0xffc978, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending}));
+  pool.rotation.x=-Math.PI/2; pool.position.set(1.9,.35,0); g.add(pool);
+
+  g.position.set(x,0,z); g.rotation.y = rotY||0;
+  world.add(g);
+  streetLamps.push({cone, pool});
+}
+for(let t=26;t<=84;t+=20){
+  for(const s of [-1,1]){
+    streetLamp(7.4, s*t, Math.PI);
+    streetLamp(-7.4, s*(t+10), 0);
+    streetLamp(s*t, 7.4, -Math.PI/2);
+    streetLamp(s*(t+10), -7.4, Math.PI/2);
+  }
+}
+
+/* ---------- 1. TRANSFORMER SECTOR (renamed from substation) ---------- */
+const transformerSectorGroup = new THREE.Group();
+transformerSectorGroup.position.set(26,0,26);
+world.add(transformerSectorGroup);
+
+const transformerParts = {tank:null, fans:[], indicators:[], radiators:[], highlight:null};
+
+(function buildTransformerSector(){
+  const g = transformerSectorGroup;
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(34,.4,30), M.gravel);
+  pad.position.y=.2; pad.receiveShadow=true; g.add(pad);
+
+  const meshMat = new THREE.MeshStandardMaterial({color:0x99a3af, roughness:.6, metalness:.7, transparent:true, opacity:.28, side:THREE.DoubleSide});
+  function fenceRun(x1,z1,x2,z2){
+    const len = Math.hypot(x2-x1, z2-z1);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(len,3.2), meshMat);
+    panel.position.set((x1+x2)/2, 1.8, (z1+z2)/2);
+    panel.rotation.y = Math.atan2(x2-x1, z2-z1) + Math.PI/2;
+    g.add(panel);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(len,.08,.08), M.steel);
+    rail.position.copy(panel.position); rail.position.y = 3.4; rail.rotation.y = panel.rotation.y; g.add(rail);
+    const n = Math.round(len/4);
+    for(let i=0;i<=n;i++){
+      const p = new THREE.Mesh(new THREE.BoxGeometry(.16,3.6,.16), M.steel);
+      p.position.set(lerp(x1,x2,i/n), 1.8, lerp(z1,z2,i/n)); p.castShadow=true; g.add(p);
+    }
+  }
+  fenceRun(-16,-14,16,-14); fenceRun(-16,14,16,14);
+  fenceRun(-16,-14,-16,14); fenceRun(16,-14,16,14);
+
+  const warn = new THREE.Mesh(new THREE.BoxGeometry(30,.5,.5), M.hazard);
+  warn.position.set(0,.45,-13.4); g.add(warn);
+
+  // Main distribution transformer tank
+  const tank = addShadow(new THREE.Mesh(new THREE.BoxGeometry(7,5.4,5.2), M.paintedGrey));
+  tank.position.set(-2,3.1,0);
+  g.add(tank);
+  transformerParts.tank = tank;
+
+  // Visual highlight aura for transformer warning reactions
+  const aura = new THREE.Mesh(new THREE.BoxGeometry(7.6, 6.0, 5.8), M.highlightAura.clone());
+  aura.position.copy(tank.position);
+  aura.visible = false;
+  g.add(aura);
+  transformerParts.highlight = aura;
+
+  registerDigitalAsset(tank, {
+    id: 'TR-402-B',
+    name: '33 kV / 415 V Community Transformer',
+    type: 'Step-Down Distribution Transformer with OLTC',
+    location: 'Transformer Yard (Bus-1)',
+    desc: 'The single point of grid interconnect for the whole community. Mineral-oil insulated, forced-air cooled, with automatic on-load tap changer holding secondary voltage within statutory tolerances.',
+    rating: '200 kVA (3-Phase, 50 Hz)',
+    getLive: (s) => ({
+      load: (s.load * 2.0).toFixed(1) + ' kVA (' + s.load.toFixed(1) + ' %)',
+      gen: 'Grid Inflow: ' + Math.max(0, (s.load*2.0 - s.solar - s.wind)).toFixed(0) + ' kW',
+      pf: s.pf.toFixed(2) + ' (inductive)',
+      flex: 'OLTC ±10% in 16 steps',
+      state: s.temp >= 95 ? 'CRITICAL: Thermal Overload' : s.temp >= 78 ? 'STRESSED: Forced Cooling Active' : 'Optimal ONAF Operation',
+      health: s.temp >= 95 ? '54 / 100 (Degrading)' : s.temp >= 78 ? '82 / 100 (Thermal Wear)' : '98 / 100 (Good)'
+    })
+  });
+
+  for(const s of [-1,1]){
+    for(let i=-2;i<=2;i++){
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(.12,4.2,1.0), M.steelDark);
+      fin.position.set(-2 + s*3.65, 3.1, i*1.05);
+      fin.castShadow = true;
+      g.add(fin);
+      transformerParts.radiators.push(fin);
+    }
+    const header = new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,5.6,10), M.paintedGrey);
+    header.rotation.x=Math.PI/2; header.position.set(-2+s*3.65,5.4,0); g.add(header);
+  }
+  for(const s of [-1,1]){
+    const housing = new THREE.Mesh(new THREE.CylinderGeometry(.85,.85,.35,16), M.steelDark);
+    housing.rotation.z=Math.PI/2; housing.position.set(-2+s*4.2,1.4,0); g.add(housing);
+    const blade = new THREE.Group();
+    for(let b=0;b<5;b++){
+      const bl = new THREE.Mesh(new THREE.BoxGeometry(.7,.06,.22), M.steel);
+      bl.position.set(Math.cos(b/5*6.28)*.42, Math.sin(b/5*6.28)*.42, 0);
+      bl.rotation.z = b/5*6.28; blade.add(bl);
+    }
+    blade.rotation.y=Math.PI/2; blade.position.set(-2+s*4.45,1.4,0);
+    g.add(blade); transformerParts.fans.push(blade);
+  }
+  const cons = new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,5.4,16), M.paintedGrey);
+  cons.rotation.z=Math.PI/2; cons.position.set(-2,6.5,-1.6); cons.castShadow=true; g.add(cons);
+  const gauge = new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.12,14), M.steel);
+  gauge.rotation.z=Math.PI/2; gauge.position.set(.85,6.5,-1.6); g.add(gauge);
+
+  for(let i=-1;i<=1;i++){
+    const bx = -2 + i*1.9;
+    const stack = new THREE.Group();
+    for(let s=0;s<6;s++){
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(.34-s*.012,.36-s*.012,.14,12), M.porcelain);
+      sh.position.y = s*.34; stack.add(sh);
+      const nk = new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.2,10), M.porcelain);
+      nk.position.y = s*.34+.17; stack.add(nk);
+    }
+    stack.position.set(bx, 5.9, 1.2); stack.castShadow=true; g.add(stack);
+    const term = new THREE.Mesh(new THREE.SphereGeometry(.2,12,10), M.copper);
+    term.position.set(bx, 8.05, 1.2); g.add(term);
+  }
+
+  for(const lx of [-9,5]){
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(.18,.28,12,8), M.steel);
+    leg.position.set(lx,6,-8); leg.castShadow=true; g.add(leg);
+  }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(15.2,.5,.5), M.steel);
+  beam.position.set(-2,11.7,-8); beam.castShadow=true; g.add(beam);
+  for(let i=-1;i<=1;i++){
+    const ins = new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,1.5,10), M.porcelain);
+    ins.position.set(-2+i*4.4,10.8,-8); g.add(ins);
+  }
+
+  for(let i=0;i<3;i++){
+    const cb = new THREE.Mesh(new THREE.BoxGeometry(1.5,2.4,1.4), M.paintedGrey);
+    cb.position.set(8 + i*2.4, 1.6, -4.5); cb.castShadow=true; g.add(cb);
+    for(const s of [-.45,.45]){
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,2.0,10), M.porcelain);
+      post.position.set(8+i*2.4+s, 3.8, -4.5); g.add(post);
+    }
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.4,.12,.12), M.copper);
+    bar.position.set(8+i*2.4,4.9,-4.5); g.add(bar);
+  }
+
+  const ctrl = addShadow(new THREE.Mesh(new THREE.BoxGeometry(7,3.6,5), M.concrete));
+  ctrl.position.set(9,2,7); g.add(ctrl);
+  const ctrlRoof = new THREE.Mesh(new THREE.BoxGeometry(7.6,.3,5.6), M.trim);
+  ctrlRoof.position.set(9,3.9,7); g.add(ctrlRoof);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.2,2.2,.12), M.trim);
+  door.position.set(9,1.3,4.55); g.add(door);
+  for(const wx of [7,11]){
+    const w = new THREE.Mesh(new THREE.BoxGeometry(1.4,1,.12), M.worksWindow);
+    w.position.set(wx,2.4,4.55); g.add(w);
+  }
+
+  registerDigitalAsset(ctrl, {
+    id: 'CTL-402',
+    name: 'Transformer SCADA Protection Centre',
+    type: 'Substation Control Room & RTU',
+    location: 'Transformer Yard (North Bay)',
+    desc: 'Houses the differential protection relays, digital fault recorder, SCADA telecontrol gateway and automated tap-changer logic.',
+    rating: 'Dual 24V DC battery backed',
+    getLive: (s) => ({
+      load: '1.2 kW internal station load',
+      gen: '0 kW (Control & Protection Only)',
+      pf: '0.99',
+      flex: 'Auto trip / black start logic armed',
+      state: s.volt < 208 ? 'Voltage Sag Alert' : 'Telemetry Online',
+      health: '100 / 100 (Redundant)'
+    })
+  });
+
+  for(let i=0;i<3;i++){
+    const led = new THREE.Mesh(new THREE.SphereGeometry(.14,10,8), M.statusGood.clone());
+    led.position.set(7.2+i*.6, 3.4, 4.6);
+    g.add(led); transformerParts.indicators.push(led);
+  }
+
+  const trench = new THREE.Mesh(new THREE.BoxGeometry(24,.12,1.2), M.concrete);
+  trench.position.set(0,.42,4.5); g.add(trench);
+})();
+
+/* ---------- 2. RESIDENTIAL DISTRICT (HOMES & COMMUNITY BATTERY) ---------- */
+const homesGroup = new THREE.Group();
+homesGroup.position.set(-28,0,26);
+world.add(homesGroup);
+const homeSolarPanels = [], homeBatteryLeds = [];
+const homesAuras = [];
+
+function house(px,pz,rotY,opt, houseIdx){
+  const g = new THREE.Group();
+  const W = opt.w, D = opt.d, H = opt.h;
+
+  const plot = new THREE.Mesh(new THREE.BoxGeometry(W+7, .16, D+7), new THREE.MeshStandardMaterial({color:0x3d6234, roughness:1}));
+  plot.position.y=.08; plot.receiveShadow=true; g.add(plot);
+
+  const drive = new THREE.Mesh(new THREE.BoxGeometry(3.4,.2,D+7), M.concrete);
+  drive.position.set(W/2+1.9,.12,0); drive.receiveShadow=true; g.add(drive);
+
+  const walls = addShadow(new THREE.Mesh(new THREE.BoxGeometry(W,H,D), opt.wall));
+  walls.position.y = H/2 + .16;
+  g.add(walls);
+
+  // Aura for visual reactions
+  const aura = new THREE.Mesh(new THREE.BoxGeometry(W+.6, H+.6, D+.6), M.highlightAura.clone());
+  aura.position.copy(walls.position);
+  aura.visible = false;
+  g.add(aura);
+  homesAuras.push(aura);
+
+  const houseId = 'RES-0' + (houseIdx + 1);
+  registerDigitalAsset(walls, {
+    id: houseId,
+    name: 'Smart Residence #' + (houseIdx + 1),
+    type: 'Prosumer Residential Node with PV & Storage',
+    location: 'Residential Way (Feeder 2)',
+    desc: 'Smart suburban household with 6.5 kW monocrystalline rooftop solar, a 13.5 kWh home battery, and flexible smart thermostat heat pump load.',
+    rating: '10 kW grid connection (230 V single-phase)',
+    getLive: (s) => ({
+      load: (s.load > 90 ? (5.2 + (houseIdx%3)*.6) : (2.4 + (houseIdx%2)*.5)).toFixed(1) + ' kW active demand',
+      gen: (s.solar * 0.055 * (1 + (houseIdx%2)*0.1)).toFixed(1) + ' kW rooftop PV',
+      pf: (s.pf * 0.99).toFixed(2),
+      flex: '±2.2 kW heat pump curtailment / BESS dispatch',
+      state: s.volt < 212 ? 'Undervoltage Alert' : (s.solar > 150 ? 'Net Exporter (Solar Peak)' : 'Self-Sustaining'),
+      health: '99 / 100 (Nominal)'
+    })
+  });
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-W/2-.5, 0); shape.lineTo(W/2+.5, 0); shape.lineTo(0, opt.roofH); shape.closePath();
+  const roofGeo = new THREE.ExtrudeGeometry(shape, {depth:D+1, bevelEnabled:false});
+  roofGeo.translate(0,0,-(D+1)/2);
+  const roof = new THREE.Mesh(roofGeo, opt.roof);
+  roof.position.y = H+.16; roof.castShadow = true; roof.receiveShadow = true;
+  g.add(roof);
+
+  const fascia = new THREE.Mesh(new THREE.BoxGeometry(W+1.2,.24,D+1.2), M.trim);
+  fascia.position.y = H+.2; g.add(fascia);
+
+  const pitch = Math.atan2(opt.roofH, W/2+.5);
+  for(const s of [-1,1]){
+    if(s===1 && !opt.bothSides) continue;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(W*.52,.1,D*.6), M.solar);
+    panel.position.x = s*(W/4+.2);
+    panel.position.y = H+.16+opt.roofH*0.5;
+    panel.rotation.z = s*-pitch;
+    panel.castShadow = true;
+    g.add(panel);
+    homeSolarPanels.push(panel);
+  }
+
+  const ch = new THREE.Mesh(new THREE.BoxGeometry(.9,2.2,.9), M.brick);
+  ch.position.set(-W/2+1.2, H+opt.roofH*.55, D/4); ch.castShadow=true; g.add(ch);
+
+  function win(x,y,z,w,h,ry){
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w+.18,h+.18,.1), M.trim);
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(w,h,.14), M.homeWindow);
+    frame.position.set(x,y,z); pane.position.set(x,y,z);
+    frame.rotation.y = pane.rotation.y = ry||0;
+    g.add(frame,pane);
+  }
+  const fz = D/2+.02;
+  win(-W/4, 1.6, fz, 1.2, 1.1);
+  win(W/4, 1.6, fz, 1.2, 1.1);
+  if(H>4){ win(-W/4, 4.0, fz, 1.0, 1.0); win(W/4, 4.0, fz, 1.0, 1.0); }
+  win(-W/2-.02, 2.0, 0, 1.2, 1.1, Math.PI/2);
+  win(W/2+.02, 2.0, -D/4, 1.0, 1.0, Math.PI/2);
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.1,2.2,.14), M.wood);
+  door.position.set(0,1.28,fz); g.add(door);
+  const porch = new THREE.Mesh(new THREE.BoxGeometry(2.4,.16,1.2), M.trim);
+  porch.position.set(0,2.5,fz+.5); porch.castShadow=true; g.add(porch);
+  const path = new THREE.Mesh(new THREE.BoxGeometry(1.4,.2,3.4), M.concrete);
+  path.position.set(0,.12,D/2+1.9); g.add(path);
+
+  const bat = new THREE.Mesh(new THREE.BoxGeometry(.28,1.25,.7), new THREE.MeshStandardMaterial({color:0xdfe3e8, roughness:.35, metalness:.2}));
+  bat.position.set(W/2+.15, 1.5, -D/4); bat.castShadow=true; g.add(bat);
+  const led = new THREE.Mesh(new THREE.BoxGeometry(.06,.75,.05), M.statusGood.clone());
+  led.position.set(W/2+.3, 1.5, -D/4); g.add(led);
+  homeBatteryLeds.push(led);
+
+  const hedgeF = new THREE.Mesh(new THREE.BoxGeometry(W+6.6,1.1,.9), M.hedge);
+  hedgeF.position.set(0,.55,D/2+3.4); hedgeF.castShadow=true; g.add(hedgeF);
+
+  g.position.set(px,0,pz); g.rotation.y = rotY;
+  homesGroup.add(g);
+
+  if(Math.random()>.45){
+    const c = buildCar(pick([0x2f3a46,0x8d2f2f,0xe9eaec,0x274c6e]));
+    c.position.set(px + (W/2+1.9)*Math.cos(rotY), 0, pz - (W/2+1.9)*Math.sin(rotY));
+    c.rotation.y = rotY;
+    c.traverse(o=>{o.castShadow=true;});
+    homesGroup.add(c);
+  }
+}
+
+(function neighbourhood(){
+  const variants = [
+    {w:7.6,d:7.0,h:4.6,roofH:2.6,wall:M.wallA,roof:M.roofA,bothSides:true},
+    {w:8.2,d:7.4,h:3.4,roofH:2.9,wall:M.wallB,roof:M.roofB,bothSides:false},
+    {w:7.0,d:6.6,h:5.0,roofH:2.4,wall:M.wallC,roof:M.roofA,bothSides:true},
+    {w:8.0,d:7.0,h:3.6,roofH:3.1,wall:M.wallA,roof:M.roofB,bothSides:false}
+  ];
+  for(let i=0;i<4;i++) house(-14 + i*9.6, 6, Math.PI, variants[i%4], i);
+  for(let i=0;i<4;i++) house(-14 + i*9.6, -8, 0, variants[(i+2)%4], i+4);
+
+  const lane = new THREE.Mesh(new THREE.BoxGeometry(46,.22,6), M.roadPlain);
+  lane.position.set(-0.5,.16,-1); lane.receiveShadow=true; homesGroup.add(lane);
+
+  const shell = addShadow(new THREE.Mesh(new THREE.BoxGeometry(6.4,3,2.6), new THREE.MeshStandardMaterial({color:0xcdd3da, roughness:.4, metalness:.35})));
+  shell.position.set(16,1.7,-1); homesGroup.add(shell);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(7.4,.4,3.6), M.concrete);
+  base.position.set(16,.2,-1); base.receiveShadow=true; homesGroup.add(base);
+  for(let i=0;i<3;i++){
+    const vent = new THREE.Mesh(new THREE.BoxGeometry(1.4,1.6,.1), M.steelDark);
+    vent.position.set(14+i*1.9, 1.9, .35); homesGroup.add(vent);
+  }
+  const socLed = new THREE.Mesh(new THREE.BoxGeometry(4.2,.14,.08), M.statusGood.clone());
+  socLed.position.set(16,.6,1.35); homesGroup.add(socLed);
+  homeBatteryLeds.push(socLed);
+
+  registerDigitalAsset(shell, {
+    id: 'BESS-01',
+    name: 'Riverbend Community BESS Energy Storage',
+    type: 'Lithium Iron Phosphate (LFP) Utility Storage',
+    location: 'Residential Way East (Feeder 2 Terminal)',
+    desc: 'Shared 250 kWh utility-scale community battery storage. Soaks up midday solar excess, carries the street through the evening demand peak, and black-starts the island during outages.',
+    rating: '250 kWh total capacity (120 kW inverter)',
+    getLive: (s) => ({
+      load: Math.round(s.soc) + ' % SOC (' + (s.soc * 2.5).toFixed(0) + ' kWh)',
+      gen: (s.bat < 0 ? Math.abs(s.bat).toFixed(0) + ' kW (Discharging to Grid)' : '0 kW (Charging at +' + s.bat.toFixed(0) + ' kW)'),
+      pf: '1.00 (Pure Inverter Active Power)',
+      flex: '±120 kW bidirectional dispatch (10 ms)',
+      state: s.soc < 20 ? 'CRITICAL: Low SOC Reserve' : (s.bat < -50 ? 'Peak Shaving Dispatch Active' : 'Normal Grid Balancing'),
+      health: '98.5 / 100 (Cycle Life: 98%)'
+    })
+  });
+})();
+
+/* ---------- 3. EV CHARGING HUB ---------- */
+const evGroup = new THREE.Group();
+evGroup.position.set(-30,0,-26);
+world.add(evGroup);
+const evChargers = [], evCars = [];
+let evHubAura = null;
+
+(function chargingHub(){
+  const g = evGroup;
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(30,.26,24), M.roadPlain);
+  apron.position.y=.14; apron.receiveShadow=true; g.add(apron);
+
+  const aura = new THREE.Mesh(new THREE.BoxGeometry(30.8, 4.0, 24.8), M.highlightAura.clone());
+  aura.position.set(0, 2.0, 0);
+  aura.visible = false;
+  g.add(aura);
+  evHubAura = aura;
+
+  registerDigitalAsset(apron, {
+    id: 'EVH-01',
+    name: 'Rapid EV Supercharger Hub Plaza',
+    type: 'Multi-Bay High Power Fast Charging & V2G Station',
+    location: 'West Interchange (Feeder 3)',
+    desc: 'Eight-bay DC ultra-fast charging plaza with bidirectional Vehicle-to-Grid (V2G) firmware. Connected vehicles can inject energy back into the local microgrid to save the transformer during stress.',
+    rating: '350 kW aggregate capacity (400V - 800V DC)',
+    getLive: (s) => ({
+      load: Math.round(s.ev) + ' kW active draw (' + Math.round(s.evCars) + ' cars)',
+      gen: (s.bat < 0 && s.evCars > 3 ? 'V2G Export: 28 kW deployed' : '0 kW (Consumption Mode)'),
+      pf: '0.97 (Active PFC Rectifiers)',
+      flex: 'Up to 150 kW V2G peak shedding capability',
+      state: s.ev > 200 ? 'PEAK STRESS: Feeder Capacity Near Limit' : 'Standard Smart Charging Cycle',
+      health: '100 / 100 (Fully Operational)'
+    })
+  });
+
+  const paint = new THREE.MeshStandardMaterial({color:0xe8edf4, roughness:.8});
+  for(let i=0;i<4;i++){
+    for(const row of [-1,1]){
+      const x = -9 + i*6;
+      for(const s of [-1.6,1.6]){
+        const line = new THREE.Mesh(new THREE.BoxGeometry(.16,.02,6.2), paint);
+        line.position.set(x+s, .28, row*5.2); g.add(line);
+      }
+      const stop = new THREE.Mesh(new THREE.BoxGeometry(2.6,.22,.34), M.hazard);
+      stop.position.set(x, .35, row*2.2); g.add(stop);
+    }
+  }
+
+  for(const cx of [-13,0,13]){
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(.28,.36,6.6,12), M.paintedGrey);
+    col.position.set(cx,3.3,0); col.castShadow=true; g.add(col);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.3,.3,1.3), M.concrete);
+    foot.position.set(cx,.3,0); g.add(foot);
+  }
+  const beamL = new THREE.Mesh(new THREE.BoxGeometry(30,.5,.6), M.steel);
+  beamL.position.set(0,6.5,0); g.add(beamL);
+  for(let i=0;i<7;i++){
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(.35,.3,17), M.steel);
+    rib.position.set(-12+i*4,6.7,0); g.add(rib);
+  }
+  for(const s of [-1,1]){
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(30,.22,8.4), M.solar);
+    canopy.position.set(0, 7.0, s*4.5);
+    canopy.rotation.x = s*0.14;
+    canopy.castShadow = true;
+    g.add(canopy);
+    homeSolarPanels.push(canopy);
+  }
+  for(const s of [-1,1]){
+    for(let i=0;i<5;i++){
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(3.2,.1,.24), M.lamp);
+      strip.position.set(-11+i*5.2, 6.48, s*3.2); g.add(strip);
+    }
+  }
+
+  for(let i=0;i<4;i++){
+    const x = -9 + i*6;
+    const post = new THREE.Mesh(new THREE.BoxGeometry(.9,2.3,.7), new THREE.MeshStandardMaterial({color:0x22303c, roughness:.4, metalness:.5}));
+    post.position.set(x,1.35,0); post.castShadow=true; g.add(post);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.0,.18,.8), M.steelDark);
+    cap.position.set(x,2.55,0); g.add(cap);
+
+    const chargerId = 'EVC-0' + (i+1);
+    registerDigitalAsset(post, {
+      id: chargerId,
+      name: 'Dual DC Fast Post #' + (i+1),
+      type: 'Dual 175 kW CCS / NACS Pedestal',
+      location: 'Charging Hub Bay ' + (i*2+1) + ' & ' + (i*2+2),
+      desc: 'Liquid-cooled dual-port fast charger with integrated V2G inverter and ISO 15118 plug-and-charge protocol.',
+      rating: '175 kW per port',
+      getLive: (s) => ({
+        load: (s.ev / 4).toFixed(1) + ' kW dispensing',
+        gen: s.ev > 200 ? 'Throttled by Grid Protection' : 'Full Power Available',
+        pf: '0.98',
+        flex: '50 kW curtailable per port',
+        state: s.ev > 200 ? 'Operating at Peak Limiter' : 'Normal Fast Session',
+        health: '99 / 100'
+      })
+    });
+
+    for(const s of [-1,1]){
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(.52,.74), M.screen.clone());
+      scr.position.set(x, 1.75, s*.36); scr.rotation.y = s>0?0:Math.PI; g.add(scr);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.2,.035,8,20), M.statusGood.clone());
+      ring.position.set(x, 1.05, s*.37); g.add(ring);
+      evChargers.push({screen:scr.material, ring:ring.material});
+
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x+.35, 2.3, s*.3),
+        new THREE.Vector3(x+.9, 1.2, s*1.0),
+        new THREE.Vector3(x+1.1, .6, s*1.9),
+        new THREE.Vector3(x+.8, .9, s*2.6)
+      ]);
+      const cab = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, .07, 8, false), M.cable);
+      cab.castShadow = true; g.add(cab);
+    }
+  }
+
+  const colors = [0x1d4e89, 0xd9d9dd, 0x1f6b4a, 0x8c1c1c, 0x2b2f36, 0xcf8a1e, 0x36507a, 0xaeb3ba];
+  let ci=0;
+  for(let i=0;i<4;i++){
+    for(const row of [-1,1]){
+      const c = buildCar(colors[(ci)%colors.length], ci%3===0);
+      ci++;
+      c.position.set(-9 + i*6, 0, row*5.4);
+      c.rotation.y = row>0 ? 0 : Math.PI;
+      c.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+
+      const portMat = new THREE.MeshStandardMaterial({color:0x0d1a12, emissive:0x2bff92, emissiveIntensity:2.2});
+      const port = new THREE.Mesh(new THREE.SphereGeometry(.13,10,8), portMat);
+      port.position.set(.96, .95, -1.35);
+      c.add(port);
+      const flap = new THREE.Mesh(new THREE.BoxGeometry(.06,.34,.34), M.trim);
+      flap.position.set(.94, .95, -1.35); c.add(flap);
+
+      c.userData.port = portMat;
+      g.add(c); evCars.push(c);
+    }
+  }
+})();
+
+/* ---------- 4. INDUSTRY SECTOR (renamed from works) ---------- */
+const industryGroup = new THREE.Group();
+industryGroup.position.set(30,0,-28);
+world.add(industryGroup);
+const worksFans = [], stackSmoke = [];
+let windTurbine = null;
+let industryAura = null;
+
+(function buildIndustrySector(){
+  const g = industryGroup;
+  const yard = new THREE.Mesh(new THREE.BoxGeometry(38,.3,32), M.concrete);
+  yard.position.y=.15; yard.receiveShadow=true; g.add(yard);
+
+  const hall = addShadow(new THREE.Mesh(new THREE.BoxGeometry(26,10,18), M.corrugated));
+  hall.position.set(-2,5.3,0);
+  g.add(hall);
+
+  // Aura for industrial stress / high load reactions
+  const aura = new THREE.Mesh(new THREE.BoxGeometry(26.8, 10.6, 18.8), M.highlightAura.clone());
+  aura.position.copy(hall.position);
+  aura.visible = false;
+  g.add(aura);
+  industryAura = aura;
+
+  registerDigitalAsset(hall, {
+    id: 'IND-09',
+    name: 'Riverbend Precision Industry & Manufacturing',
+    type: 'Heavy Commercial & Industrial (C&I) Facility',
+    location: 'East Industrial Park (Feeder 4)',
+    desc: 'Heavy machining, CNC robotics and thermal ovens. Largest single load in the community, with 45 kW of curtailable automated demand-response capability.',
+    rating: '150 kW peak load supply (415 V 3-Phase)',
+    getLive: (s) => ({
+      load: (s.load > 90 ? '78 kW (Peak Manufacturing)' : '40 kW (Base Machining)'),
+      gen: 'Rooftop PV: ' + (s.solar * 0.28).toFixed(0) + ' kW',
+      pf: '0.89 (Inductive motor loads)',
+      flex: 'Up to 35 kW curtailable within 15 seconds',
+      state: s.load > 90 ? 'High Energy Operating Schedule' : 'Normal Production Shift',
+      health: '96 / 100'
+    })
+  });
+
+  for(let i=-3;i<=3;i++){
+    const s = new THREE.Shape();
+    s.moveTo(-2.1,0); s.lineTo(2.1,0); s.lineTo(2.1,1.9); s.closePath();
+    const geo = new THREE.ExtrudeGeometry(s,{depth:18,bevelEnabled:false});
+    geo.translate(0,0,-9);
+    const m = new THREE.Mesh(geo, M.corrugated);
+    m.position.set(-2+i*4.2, 10.3, 0); m.castShadow=true; g.add(m);
+    const glazing = new THREE.Mesh(new THREE.BoxGeometry(.14,1.85,17.4), M.worksWindow);
+    glazing.position.set(-2+i*4.2+2.05, 11.25, 0); g.add(glazing);
+  }
+
+  for(let i=-2;i<=2;i++){
+    const p = new THREE.Mesh(new THREE.BoxGeometry(3.4,.14,5.6), M.solar);
+    p.position.set(-2+i*4.2, 12.6, -4.2); p.rotation.x = .3; p.castShadow=true;
+    g.add(p); homeSolarPanels.push(p);
+  }
+
+  for(const dx of [-8,-2,4]){
+    const door = new THREE.Mesh(new THREE.BoxGeometry(4.2,4.4,.2), M.steelDark);
+    door.position.set(dx, 2.5, 9.05); g.add(door);
+    for(let r=0;r<7;r++){
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(4.2,.12,.1), M.steel);
+      rib.position.set(dx, .9+r*.6, 9.15); g.add(rib);
+    }
+  }
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(24,.3,3), M.steelDark);
+  canopy.position.set(-2,5.4,10.4); canopy.castShadow=true; g.add(canopy);
+
+  const office = addShadow(new THREE.Mesh(new THREE.BoxGeometry(9,6.4,8), M.wallB));
+  office.position.set(15,3.4,4); g.add(office);
+  for(let f=0;f<2;f++){
+    for(let i=0;i<3;i++){
+      const w = new THREE.Mesh(new THREE.BoxGeometry(1.9,1.5,.12), M.worksWindow);
+      w.position.set(12+i*3, 2.2+f*2.6, 8.05); g.add(w);
+      const w2 = new THREE.Mesh(new THREE.BoxGeometry(.12,1.5,1.9), M.worksWindow);
+      w2.position.set(19.55, 2.2+f*2.6, 1.6+i*2.4); g.add(w2);
+    }
+  }
+  const oRoof = new THREE.Mesh(new THREE.BoxGeometry(9.6,.4,8.6), M.trim);
+  oRoof.position.set(15,6.8,4); g.add(oRoof);
+
+  for(const hx of [-9,-2,5]){
+    const box = addShadow(new THREE.Mesh(new THREE.BoxGeometry(3,1.6,3), M.paintedGrey));
+    box.position.set(hx,11.1,6); g.add(box);
+    const grille = new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,.12,20), M.steelDark);
+    grille.position.set(hx,11.95,6); g.add(grille);
+    const fan = new THREE.Group();
+    for(let b=0;b<6;b++){
+      const bl = new THREE.Mesh(new THREE.BoxGeometry(1.0,.05,.26), M.steel);
+      bl.position.set(Math.cos(b/6*6.28)*.5, 0, Math.sin(b/6*6.28)*.5);
+      bl.rotation.y = -b/6*6.28; fan.add(bl);
+    }
+    fan.position.set(hx,12.03,6); g.add(fan); worksFans.push(fan);
+  }
+
+  const stack = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(1.0,1.5,20,20), M.brick));
+  stack.position.set(-16,10,-8); g.add(stack);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(1.06,1.06,.6,20), M.trim);
+  band.position.set(-16,19.2,-8); g.add(band);
+  const beac = new THREE.Mesh(new THREE.SphereGeometry(.3,12,10), M.beacon.clone());
+  beac.position.set(-16,20.4,-8); g.add(beac);
+  industryGroup.userData.beacon = beac;
+
+  for(let i=0;i<26;i++){
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex, transparent:true, opacity:.24, depthWrite:false, color:0xb9c0c9}));
+    s.position.set(-16 + rnd(-.6,.6), 20 + i*1.3, -8 + rnd(-.6,.6));
+    s.scale.setScalar(rnd(2.6,4.4));
+    g.add(s);
+    stackSmoke.push({s, seed:rnd(0,10)});
+  }
+
+  for(const tx of [12,16.5]){
+    const tank = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(1.9,1.9,6,20), M.steel));
+    tank.position.set(tx,3.3,-9); g.add(tank);
+    const top = new THREE.Mesh(new THREE.SphereGeometry(1.9,20,10,0,6.3,0,1.2), M.steel);
+    top.position.set(tx,6.3,-9); g.add(top);
+  }
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,5,12), M.copper);
+  pipe.rotation.z=Math.PI/2; pipe.position.set(14.2,5.2,-9); g.add(pipe);
+
+  for(let i=0;i<2;i++){
+    const t = buildTruck();
+    t.position.set(-11+i*7, 0, 14.5); t.rotation.y = Math.PI;
+    g.add(t);
+  }
+
+  // Wind Turbine on the ridge
+  windTurbine = (function(){
+    const t = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6,2.2,.8,18), M.concrete);
+    base.position.y=.4; t.add(base);
+    const tower = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(.55,1.3,30,18), new THREE.MeshStandardMaterial({color:0xe6eaee, roughness:.45, metalness:.25})));
+    tower.position.y=15.4; t.add(tower);
+    const nac = new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,4.2), new THREE.MeshStandardMaterial({color:0xe6eaee, roughness:.4, metalness:.3}));
+    nac.position.y=30.6; nac.castShadow=true; t.add(nac);
+    const rotor = new THREE.Group();
+    const hub = new THREE.Mesh(new THREE.ConeGeometry(.7,1.3,14), new THREE.MeshStandardMaterial({color:0xe6eaee, roughness:.4}));
+    hub.rotation.x=-Math.PI/2; hub.position.z=-.5; rotor.add(hub);
+    for(let b=0;b<3;b++){
+      const shape = new THREE.Shape();
+      shape.moveTo(0,-.42); shape.lineTo(13,-.12); shape.lineTo(13,.1); shape.lineTo(0,.5); shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape,{depth:.16,bevelEnabled:false});
+      const blade = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:0xf2f5f8, roughness:.4}));
+      blade.rotation.z = b/3*Math.PI*2;
+      blade.castShadow = true;
+      rotor.add(blade);
+    }
+    rotor.position.set(0,30.6,-2.4);
+    t.add(rotor); t.userData.rotor = rotor;
+    t.position.set(6,0,-26);
+    g.add(t);
+
+    registerDigitalAsset(nac, {
+      id: 'WTG-01',
+      name: 'Ridge Wind Turbine Generator',
+      type: 'Direct-Drive Permanent Magnet Wind Generator',
+      location: 'Riverbend Heights (Bus-4 Spur)',
+      desc: '250 kW wind turbine on the community ridge line. Generates complementary renewable power, running strongest at dusk and night when solar drops.',
+      rating: '250 kW Rated (Cut-in 3.5 m/s)',
+      getLive: (s) => ({
+        load: '0 kW (Self Generating)',
+        gen: Math.round(s.wind) + ' kW active clean power',
+        pf: '1.00 (Inverter Backed)',
+        flex: 'Blade pitch curtailment available',
+        state: s.wind < 30 ? 'Low Wind Idle' : 'Optimal Wind Harvest',
+        health: '97 / 100'
+      })
+    });
+    return t;
+  })();
+})();
+
+/* ---------- VEHICLES & TRAFFIC ---------- */
+function buildCar(color, isSuv){
+  const g = new THREE.Group();
+  const L = isSuv ? 4.9 : 4.4, W = isSuv ? 2.0 : 1.86, lift = isSuv ? .16 : 0;
+  const paint = new THREE.MeshStandardMaterial({color, roughness:.28, metalness:.72, envMapIntensity:1.5});
+
+  const b = new THREE.Shape();
+  b.moveTo(-L/2, .28); b.lineTo(-L/2+.1, .74); b.lineTo(-L*0.3, .82);
+  b.lineTo(L*0.14, .86); b.lineTo(L*0.42, .78); b.lineTo(L/2-.06, .66);
+  b.lineTo(L/2, .42); b.lineTo(L/2-.12, .28); b.closePath();
+  const bodyGeo = new THREE.ExtrudeGeometry(b, {depth:W, bevelEnabled:true, bevelSize:.06, bevelThickness:.06, bevelSegments:2});
+  bodyGeo.rotateY(Math.PI/2); bodyGeo.translate(W/2,0,0);
+  const body = new THREE.Mesh(bodyGeo, paint);
+  body.position.y = .34 + lift; body.castShadow = true; g.add(body);
+
+  const c = new THREE.Shape();
+  c.moveTo(-L*0.28, .84); c.lineTo(-L*0.34, 1.12); c.lineTo(L*0.02, 1.2);
+  c.lineTo(L*0.2, 1.1); c.lineTo(L*0.24, .84); c.closePath();
+  const cabGeo = new THREE.ExtrudeGeometry(c, {depth:W-.16, bevelEnabled:false});
+  cabGeo.rotateY(Math.PI/2); cabGeo.translate((W-.16)/2,0,0);
+  const cab = new THREE.Mesh(cabGeo, M.glass);
+  cab.position.y = .34 + lift; cab.castShadow = true; g.add(cab);
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(W-.22, .07, L*0.3), paint);
+  roof.position.set(0, 1.5 + lift, -L*0.06); g.add(roof);
+
+  const tyre = new THREE.MeshStandardMaterial({color:0x14161a, roughness:.95});
+  for(const wx of [-W/2+.06, W/2-.06]){
+    for(const wz of [-L*0.31, L*0.31]){
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(.36+lift,.36+lift,.26,18), tyre);
+      t.rotation.z = Math.PI/2; t.position.set(wx, .36+lift, wz); t.castShadow=true; g.add(t);
+      const r = new THREE.Mesh(new THREE.CylinderGeometry(.21,.21,.28,10), M.steel);
+      r.rotation.z = Math.PI/2; r.position.set(wx, .36+lift, wz); g.add(r);
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(.42+lift,.05,6,14,Math.PI), M.trim);
+      arch.position.set(wx, .38+lift, wz); arch.rotation.y=Math.PI/2; g.add(arch);
+    }
+  }
+
+  const hl = new THREE.Mesh(new THREE.BoxGeometry(W-.5,.14,.1), M.headlamp.clone());
+  hl.position.set(0, .72+lift, -L/2+.02); g.add(hl);
+  const tl = new THREE.Mesh(new THREE.BoxGeometry(W-.42,.11,.1), M.taillamp.clone());
+  tl.position.set(0, .78+lift, L/2-.02); g.add(tl);
+  g.userData.headlamp = hl.material;
+  g.userData.taillamp = tl.material;
+  return g;
+}
+
+function buildTruck(){
+  const g = new THREE.Group();
+  const cab = addShadow(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.6,3), new THREE.MeshStandardMaterial({color:0x2c4a6b, roughness:.35, metalness:.6})));
+  cab.position.set(0,1.9,-3.2); g.add(cab);
+  const wind = new THREE.Mesh(new THREE.BoxGeometry(2.3,1.1,.12), M.glass);
+  wind.position.set(0,2.5,-4.68); g.add(wind);
+  const box = addShadow(new THREE.Mesh(new THREE.BoxGeometry(2.6,3.0,7.4), new THREE.MeshStandardMaterial({color:0xd7dbe0, roughness:.6})));
+  box.position.set(0,2.3,1.2); g.add(box);
+  const tyre = new THREE.MeshStandardMaterial({color:0x14161a, roughness:.95});
+  for(const wx of [-1.2,1.2]) for(const wz of [-3.4,-.2,1.4,3]){
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.34,16), tyre);
+    t.rotation.z=Math.PI/2; t.position.set(wx,.55,wz); t.castShadow=true; g.add(t);
+  }
+  return g;
+}
+
+/* moving traffic */
+const traffic = [];
+(function spawnTraffic(){
+  const colors=[0x9aa3ad,0x22303f,0x7d1f1f,0xe4e6e9,0x1f5c46,0x2b4d7a,0xc9932c,0x4a4f57];
+  let ci=0;
+  for(let q=0;q<4;q++){
+    const a = q*Math.PI/2;
+    const u = {x:Math.cos(a), z:Math.sin(a)};
+    for(const dir of [1,-1]){
+      for(let i=0;i<2;i++){
+        const car = buildCar(colors[(ci++)%colors.length], ci%4===0);
+        car.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+        world.add(car);
+        traffic.push({kind:'arm', car, u, dir, r: 28 + i*34 + rnd(0,16), speed: rnd(8,13)});
+      }
+    }
+  }
+  for(let i=0;i<4;i++){
+    const car = buildCar(colors[(ci++)%colors.length], false);
+    car.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+    world.add(car);
+    traffic.push({kind:'ring', car, ang: i/4*Math.PI*2 + rnd(0,.6), radius: i%2 ? 16.9 : 19.3, speed: rnd(.15,.23)});
+  }
+})();
+
+/* ---------- DISTRIBUTION NETWORK POLES & CONDUCTORS ---------- */
+const NODE = {
+  hub:        new THREE.Vector3(0, 15.1, 0),
+  qNE:        new THREE.Vector3(17.5, 9.8, 17.5),
+  qNW:        new THREE.Vector3(-17.5, 9.8, 17.5),
+  qSW:        new THREE.Vector3(-17.5, 9.8, -17.5),
+  qSE:        new THREE.Vector3(17.5, 9.8, -17.5),
+  transformer:new THREE.Vector3(24, 11.4, 18),
+  homes:      new THREE.Vector3(-20, 7.4, 26),
+  ev:         new THREE.Vector3(-22, 7.4, -24),
+  industry:   new THREE.Vector3(18, 7.8, -22)
+};
+
+function pole(v, label, id){
+  const g = new THREE.Group();
+  const p = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(.16,.26,10.4,10), M.wood));
+  p.position.y=5.2; g.add(p);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(3.2,.18,.2), M.wood);
+  arm.position.y=9.5; g.add(arm);
+  const brace = new THREE.Mesh(new THREE.BoxGeometry(.12,1.4,.12), M.wood);
+  brace.position.set(0,8.8,0); brace.rotation.z=.5; g.add(brace);
+  for(const ix of [-1.3,0,1.3]){
+    const ins = new THREE.Mesh(new THREE.CylinderGeometry(.13,.16,.42,10), M.porcelain);
+    ins.position.set(ix,9.8,0); g.add(ins);
+  }
+  const box = new THREE.Mesh(new THREE.BoxGeometry(.55,.8,.4), M.steelDark);
+  box.position.set(.3,7.4,.3); g.add(box);
+  g.position.set(v.x, 0, v.z);
+  g.rotation.y = Math.atan2(v.z, v.x) + Math.PI/2;
+  world.add(g);
+
+  registerDigitalAsset(p, {
+    id: id,
+    name: '3-Phase Overhead Feeder Pole (' + label + ')',
+    type: 'Medium-Voltage Distribution Junction Post',
+    location: label + ' Crossway',
+    desc: 'Treated pinewood pole carrying three-phase 415V aerial bundled conductors and automated section switch.',
+    rating: '3 × 150 mm² ACSR Conductor',
+    getLive: (s) => ({
+      load: (s.load * 0.45).toFixed(1) + ' % section loading',
+      gen: 'Conductor Temp: ' + (42 + s.load*0.2).toFixed(1) + ' °C',
+      pf: s.pf.toFixed(2),
+      flex: 'Remote isolator switchable',
+      state: s.load > 90 ? 'High Line Ampacity' : 'Conductor Sag Normal',
+      health: '98 / 100'
+    })
+  });
+}
+pole(NODE.qNE, 'North-East Feeder Line', 'POL-NE-01');
+pole(NODE.qNW, 'North-West Residential Line', 'POL-NW-02');
+pole(NODE.qSW, 'South-West EV Plaza Line', 'POL-SW-03');
+pole(NODE.qSE, 'South-East Industry Line', 'POL-SE-04');
+
+const SPANS = [
+  ['transformer','qNE'], ['qNE','hub'],
+  ['hub','qNW'], ['qNW','homes'],
+  ['hub','qSW'], ['qSW','ev'],
+  ['hub','qSE'], ['qSE','industry']
+];
+const spanCurves = {};
+SPANS.forEach(([a,b])=>{
+  const p1 = NODE[a], p2 = NODE[b];
+  const mid = new THREE.Vector3().addVectors(p1,p2).multiplyScalar(.5);
+  mid.y -= Math.max(.7, p1.distanceTo(p2)*.045);
+  const curve = new THREE.QuadraticBezierCurve3(p1.clone(), mid, p2.clone());
+  spanCurves[a+'>'+b] = curve;
+  for(const off of [-0.5,0,0.5]){
+    const c2 = new THREE.QuadraticBezierCurve3(
+      p1.clone().add(new THREE.Vector3(0,0,off)),
+      mid.clone().add(new THREE.Vector3(0,0,off)),
+      p2.clone().add(new THREE.Vector3(0,0,off))
+    );
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(c2, 22, .038, 5, false), M.cable);
+    world.add(tube);
+  }
+});
+
+function serviceDrop(from, to){
+  const curve = new THREE.QuadraticBezierCurve3(from.clone(),
+    new THREE.Vector3((from.x+to.x)/2,(from.y+to.y)/2-.9,(from.z+to.z)/2), to.clone());
+  world.add(new THREE.Mesh(new THREE.TubeGeometry(curve,18,.03,5,false), M.cable));
+}
+serviceDrop(NODE.homes, new THREE.Vector3(-34,5.4,26));
+serviceDrop(NODE.ev, new THREE.Vector3(-30,6.6,-26));
+serviceDrop(NODE.industry, new THREE.Vector3(28,6.2,-28));
+
+/* ============================================================
+   6. POWER FLOW PARTICLES & VISUAL REACTIONS
+   ============================================================ */
+const flows = [];
+function makeFlow(curve, color, opts){
+  const count = (opts && opts.count) || 30;
+  const size = (opts && opts.size) || 2.0;
+  const pos = new Float32Array(count*3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+
+  const mat = new THREE.PointsMaterial({
+    map: glowTex, color: 0xffffff, size,
+    transparent:true, opacity:1, depthWrite:false, depthTest:false,
+    blending:THREE.AdditiveBlending, sizeAttenuation:true
+  });
+  const core = new THREE.Points(geo, mat);
+  core.frustumCulled = false; core.renderOrder = 6;
+  world.add(core);
+
+  const haloMat = new THREE.PointsMaterial({
+    map: glowTex, color, size: size*3.0,
+    transparent:true, opacity:.6, depthWrite:false, depthTest:false,
+    blending:THREE.AdditiveBlending, sizeAttenuation:true
+  });
+  const halo = new THREE.Points(geo, haloMat);
+  halo.frustumCulled = false; halo.renderOrder = 5;
+  world.add(halo);
+
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, .085, 6, !!(opts&&opts.closed)),
+    new THREE.MeshBasicMaterial({color, transparent:true, opacity:.5, blending:THREE.AdditiveBlending, depthWrite:false}));
+  tube.renderOrder = 4;
+  world.add(tube);
+
+  const prog = [];
+  for(let i=0;i<count;i++) prog.push(i/count);
+  return {objs:[core,halo,tube], geo, curve, prog, speed:(opts&&opts.speed)||.16, mat, haloMat, tubeMat:tube.material, color:new THREE.Color(color)};
+}
+
+function flowPath(keys, color, opts){
+  const pts = keys.map(k=>NODE[k].clone());
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', .2);
+  flows.push(makeFlow(curve, color, opts));
+}
+
+function clearFlows(){
+  flows.forEach(f=>{
+    f.objs.forEach(o=>{ world.remove(o); if(o.material) o.material.dispose(); });
+    f.geo.dispose();
+  });
+  flows.length = 0;
+}
+
+const hubRing = (function(){
+  const pts = [];
+  for(let i=0;i<24;i++){
+    const a = i/24*Math.PI*2;
+    pts.push(new THREE.Vector3(Math.cos(a)*7.4, 8.4, Math.sin(a)*7.4));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', .5);
+  return makeFlow(curve, 0x4fd3ff, {count:44, size:1.7, speed:.11, closed:true});
+})();
+
+const C = {ok:0x4fd3ff, green:0x3ddc8a, warn:0xffb020, bad:0xff4b42, v2g:0xb388ff};
+
+function flowsFor(mode){
+  clearFlows();
+  if(mode==='off') return;
+  if(mode==='normal'){
+    flowPath(['transformer','qNE','hub'], C.ok, {speed:.11, count:30});
+    flowPath(['hub','qSE','industry'], C.ok, {speed:.1, count:26});
+    flowPath(['hub','qNW','homes'], C.green, {speed:.1, count:26});
+    flowPath(['hub','qSW','ev'], C.ok, {speed:.1, count:26});
+    flowPath(['homes','qNW','hub'], C.green, {speed:.08, count:14, size:1.4});
+  } else if(mode==='ev'){
+    flowPath(['transformer','qNE','hub'], C.warn, {speed:.22, count:40});
+    flowPath(['hub','qSE','industry'], C.warn, {speed:.13, count:24});
+    flowPath(['hub','qNW','homes'], C.warn, {speed:.13, count:24});
+    flowPath(['hub','qSW','ev'], C.bad, {speed:.34, count:52, size:2.5});
+  } else if(mode==='homes'){
+    flowPath(['transformer','qNE','hub'], C.bad, {speed:.28, count:44});
+    flowPath(['hub','qNW','homes'], C.bad, {speed:.32, count:52, size:2.5});
+    flowPath(['hub','qSE','industry'], C.warn, {speed:.14, count:24});
+    flowPath(['hub','qSW','ev'], C.warn, {speed:.12, count:20});
+  } else if(mode==='import'){
+    flowPath(['transformer','qNE','hub'], C.warn, {speed:.26, count:48, size:2.3});
+    flowPath(['hub','qSE','industry'], C.warn, {speed:.2, count:30});
+    flowPath(['hub','qNW','homes'], C.warn, {speed:.2, count:30});
+    flowPath(['hub','qSW','ev'], C.warn, {speed:.18, count:26});
+  } else if(mode==='overload'){
+    flowPath(['transformer','qNE','hub'], C.bad, {speed:.38, count:56, size:2.6});
+    flowPath(['hub','qSE','industry'], C.bad, {speed:.36, count:50, size:2.4});
+    flowPath(['hub','qNW','homes'], C.bad, {speed:.36, count:50, size:2.4});
+    flowPath(['hub','qSW','ev'], C.bad, {speed:.36, count:50, size:2.4});
+  } else if(mode==='v2g'){
+    flowPath(['ev','qSW','hub'], C.v2g, {speed:.24, count:40, size:2.2});
+    flowPath(['hub','qNW','homes'], C.v2g, {speed:.2, count:32});
+    flowPath(['hub','qSE','industry'], C.green, {speed:.16, count:26});
+    flowPath(['transformer','qNE','hub'], C.ok, {speed:.1, count:18, size:1.5});
+  }
+}
+
+/* sparks + arc flash */
+const sparkPool = [];
+(function initSparks(){
+  const count = 240;
+  const pos = new Float32Array(count*3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({map:glowTex, color:0xffd07a, size:.9, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending});
+  const p = new THREE.Points(geo, mat);
+  p.frustumCulled=false;
+  world.add(p);
+  for(let i=0;i<count;i++) sparkPool.push({life:0, v:new THREE.Vector3()});
+  window.__sparks = {p, mat, geo, pos};
+})();
+function burstSparks(at){
+  const {pos} = window.__sparks;
+  let n=0;
+  for(let i=0;i<sparkPool.length && n<150;i++){
+    const s = sparkPool[i];
+    if(s.life>0) continue;
+    s.life = rnd(.5,1.4);
+    pos[i*3]=at.x; pos[i*3+1]=at.y; pos[i*3+2]=at.z;
+    s.v.set(rnd(-4,4), rnd(1,8), rnd(-4,4));
+    n++;
+  }
+  window.__sparks.mat.opacity = 1;
+  window.__sparks.geo.attributes.position.needsUpdate = true;
+}
+const arcFlash = new THREE.PointLight(0xfff0c0, 0, 40, 2);
+arcFlash.position.set(24,8,24);
+scene.add(arcFlash);
+
+const faultSmoke = [];
+for(let i=0;i<18;i++){
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex, color:0x3a3f46, transparent:true, opacity:0, depthWrite:false}));
+  s.position.set(24, 6, 26);
+  s.scale.setScalar(3);
+  world.add(s);
+  faultSmoke.push({s, t: i/18});
+}
+let faultSmokeOn = false;
+
+/* ============================================================
+   7. ENVIRONMENT PRESETS
+   ============================================================ */
+const PRESETS = {
+  day: {
+    sky:['rgba(86,148,222,1)','#8fb6e0','#4a5a46'], sunColor:'rgba(255,248,224,.95)', sunY:110,
+    sunPos:[58,78,42], sunInt:2.8, sunTint:0xfff3e0,
+    hemiSky:0xbcd7ff, hemiGround:0x4a5540, hemiInt:.6,
+    fog:0x9db6d4, fogDensity:.0016, exposure:1.05, bloom:.42, lamps:0, stars:0, label:'12:40', period:'Midday'
+  },
+  dusk: {
+    sky:['rgba(46,54,96,1)','#e0794a','#3a3230'], sunColor:'rgba(255,170,90,1)', sunY:200,
+    sunPos:[-72,16,34], sunInt:2.1, sunTint:0xffa257,
+    hemiSky:0xffb07a, hemiGround:0x3a3430, hemiInt:.4,
+    fog:0xc07a52, fogDensity:.0028, exposure:1.0, bloom:.75, lamps:.55, stars:.25, label:'19:12', period:'Dusk'
+  },
+  night: {
+    sky:['rgba(6,10,22,1)','#141d33','#0a0d14'], sunColor:'rgba(110,150,220,.5)', sunY:250,
+    sunPos:[-40,52,-30], sunInt:.22, sunTint:0x8fb6ff,
+    hemiSky:0x2a3a5c, hemiGround:0x0c1018, hemiInt:.28,
+    fog:0x0a1020, fogDensity:.0034, exposure:1.22, bloom:1.05, lamps:1, stars:1, label:'22:48', period:'Night'
+  }
+};
+let timeOfDay = 'day', lampLevel = 0;
+
+function applyTime(key){
+  const p = PRESETS[key];
+  timeOfDay = key;
+  const tex = Tex.sky(p.sky[0], p.sky[1], p.sky[2], p.sunColor, p.sunY);
+  const env = pmrem.fromEquirectangular(tex).texture;
+  scene.background = tex;
+  scene.environment = env;
+  scene.fog = new THREE.FogExp2(new THREE.Color(p.fog), p.fogDensity);
+  sun.position.set(p.sunPos[0], p.sunPos[1], p.sunPos[2]);
+  sun.intensity = p.sunInt;
+  sun.color.setHex(p.sunTint);
+  hemi.color.setHex(p.hemiSky);
+  hemi.groundColor.setHex(p.hemiGround);
+  hemi.intensity = p.hemiInt;
+  renderer.toneMappingExposure = p.exposure;
+  if(bloom) bloom.strength = p.bloom;
+  stars.material.opacity = p.stars;
+  lampLevel = p.lamps;
+  $('#clock').textContent = p.label;
+  $('#clock-label').textContent = p.period + ' · local grid time';
+  updateForecast();
+}
+
+/* ============================================================
+   8. POST PROCESSING
+   ============================================================ */
+let composer = null, bloom = null;
+try{
+  if(THREE.EffectComposer && THREE.UnrealBloomPass && THREE.ShaderPass && THREE.GammaCorrectionShader){
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .42, .7, .72);
+    composer.addPass(bloom);
+    const gamma = new THREE.ShaderPass(THREE.GammaCorrectionShader);
+    composer.addPass(gamma);
+  }
+}catch(e){ composer = null; }
+
+/* ============================================================
+   9. SIMULATION STATE & VISUAL REACTIONS CONTROLLER
+   ============================================================ */
+const S = {
+  load:58.2, solar:240, wind:62, temp:48.3, freq:50.01, volt:230.8, pf:.98,
+  soc:78, bat:14, ev:35, evCars:3, irr:940
+};
+const T = Object.assign({}, S);
+let condition = {tone:'ok', pill:'STEADY', headline:'All feeders within limits'};
+let powered = {homes:true, ev:true, industry:true};
+let scenarioKey = 'normal';
+let currentInspectedAssetId = null;
+
+const SCEN = {
+  normal: {
+    t:{load:58.2, solar:240, wind:62, temp:48.3, freq:50.01, volt:230.8, pf:.98, soc:78, bat:14, ev:35, evCars:3, irr:940},
+    flow:'normal', tone:'ok', pill:'STEADY', head:'All feeders within limits',
+    title:'Grid steady',
+    body:'Rooftop solar and the community battery are covering demand. No constraints on any feeder.'
+  },
+  ev_surge: {
+    t:{load:96.4, solar:190, wind:70, temp:86.7, freq:49.62, volt:212.4, pf:.91, soc:52, bat:-95, ev:288, evCars:7, irr:760},
+    flow:'ev', tone:'crit', pill:'OVERLOAD', head:'Charging hub feeder at 96%',
+    title:'Seven cars charging at once',
+    body:'The hub is pulling 288 kW through a feeder rated for less. Voltage at the far end has already sagged below the statutory band.'
+  },
+  heatwave: {
+    t:{load:91.8, solar:215, wind:22, temp:81.2, freq:49.74, volt:216.5, pf:.88, soc:38, bat:-72, ev:25, evCars:2, irr:880},
+    flow:'homes', tone:'crit', pill:'PEAK', head:'Cooling load peaking at 92%',
+    title:'42 °C outside, every heat pump running',
+    body:'Air conditioning is a poor power factor load. Current is high, the transformer is soaking heat it cannot shed, and the battery is emptying fast.'
+  },
+  solar_drop: {
+    t:{load:88.0, solar:52, wind:58, temp:74.5, freq:49.80, volt:221.0, pf:.93, soc:44, bat:-88, ev:30, evCars:3, irr:150},
+    flow:'import', tone:'warn', pill:'IMPORTING', head:'Solar down 78% in 40 seconds',
+    title:'A cloud front crossed the community',
+    body:'Generation collapsed faster than the battery can ramp, so the shortfall is coming from the transmission network at peak-hour prices.'
+  },
+  transformer_fault: {
+    t:{load:99.2, solar:120, wind:64, temp:99.8, freq:49.45, volt:204.2, pf:.85, soc:22, bat:-110, ev:120, evCars:5, irr:520},
+    flow:'overload', tone:'crit', pill:'CRITICAL', head:'Transformer oil at 99 °C',
+    title:'Transformer close to its trip point',
+    body:'Oil temperature is six degrees from the protection setting. If it trips, every customer behind it goes dark until the feeder is reconfigured.'
+  }
+};
+
+/* Visual reactions in the 3D world */
+function updateVisualReactions(){
+  const isHigh = S.load >= 75 && S.load < 90;
+  const isCrit = S.load >= 90;
+
+  // 1. Transformer warning reaction
+  if(transformerParts.highlight){
+    transformerParts.highlight.visible = isHigh || isCrit;
+    transformerParts.highlight.material.color.setHex(isCrit ? 0xff5a52 : 0xffb020);
+    transformerParts.highlight.material.opacity = isCrit ? 0.28 : 0.16;
+  }
+
+  // 2. EV Hub highlight reaction during fleet surge
+  if(evHubAura){
+    const evStressed = S.ev > 120 || scenarioKey === 'ev_surge';
+    evHubAura.visible = evStressed;
+    evHubAura.material.color.setHex(S.ev > 200 ? 0xff5a52 : 0xffb020);
+    evHubAura.material.opacity = S.ev > 200 ? 0.28 : 0.15;
+  }
+
+  // 3. Industry highlight reaction during high industrial stress / heatwave
+  if(industryAura){
+    const indStressed = isCrit || scenarioKey === 'transformer_fault';
+    industryAura.visible = indStressed;
+    industryAura.material.color.setHex(isCrit ? 0xff5a52 : 0xffb020);
+    industryAura.material.opacity = 0.2;
+  }
+
+  // 4. Homes highlight reaction during heatwave peak
+  homesAuras.forEach(a => {
+    const homesStressed = scenarioKey === 'heatwave';
+    a.visible = homesStressed;
+    a.material.color.setHex(0xff5a52);
+    a.material.opacity = 0.22;
+  });
+}
+
+function setScenario(key, silent){
+  scenarioKey = key;
+  const s = SCEN[key];
+  if(!s) return;
+  Object.assign(T, s.t);
+  flowsFor(s.flow);
+  condition = {tone:s.tone, pill:s.pill, headline:s.head};
+  setState(s.tone, s.title, s.body);
+  $$('.cmd[data-scenario]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.scenario===key)));
+  setPowered({homes:true, ev:true, industry:true});
+  updateForecast();
+  updateVisualReactions();
+
+  if(!silent){
+    if(s.tone==='crit'){ Audio_.alarm(); logEvent('crit', s.head); }
+    else if(s.tone==='warn'){ Audio_.beep(480,.18,'triangle'); logEvent('warn', s.head); }
+    else { Audio_.beep(660,.1); logEvent('ok', 'Returned to baseline conditions'); }
+  }
+}
+
+function setPowered(p){
+  Object.assign(powered, p);
+}
+
+function setState(tone, title, body){
+  const el = $('#state');
+  el.dataset.tone = tone;
+  el.innerHTML = '<b>'+title+'</b>'+body;
+}
+
+/* event log */
+let logN = 0;
+function logEvent(level, text){
+  const list = $('#log-list');
+  const row = document.createElement('div');
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0'),
+        mm = String(now.getMinutes()).padStart(2,'0'),
+        ss = String(now.getSeconds()).padStart(2,'0');
+  row.innerHTML = '<time>'+hh+':'+mm+':'+ss+'</time><span class="lv-'+level+'">'+text+'</span>';
+  list.prepend(row);
+  while(list.children.length>40) list.removeChild(list.lastChild);
+  $('#log-count').textContent = (++logN);
+}
+
+/* ============================================================
+   10. PREDICTIVE FORECAST ENGINE (NEXT 60 MINUTES)
+   ============================================================ */
+function updateForecast(){
+  const fcSolar = $('#fc-solar');
+  const fcDemand = $('#fc-demand');
+  const fcEv = $('#fc-ev');
+  const fcSoc = $('#fc-soc');
+  const fcUtil = $('#fc-util');
+  const fcCallout = $('#fc-callout');
+
+  let sTrend = '↓ 195 kW', dTrend = '↑ 124 kW', evTrend = '↑ 60 kW', socTrend = '↓ 72 %', utilVal = '64.5 %';
+  let calloutText = 'Potential grid stress in approximately 35 min.';
+  let calloutType = 'warn';
+
+  if(timeOfDay === 'night'){
+    sTrend = '→ 0 kW';
+    dTrend = '↓ 68 kW';
+    evTrend = '↑↑ 140 kW (Overnight Fleet)';
+    socTrend = '↓ 58 %';
+    utilVal = '52.0 %';
+    calloutText = 'Wind generator & battery carry night charging. Grid steady.';
+    calloutType = 'good';
+  } else if(scenarioKey === 'normal'){
+    sTrend = '↓ 190 kW';
+    dTrend = '↑ 128 kW';
+    evTrend = '↑ 55 kW';
+    socTrend = '↓ 74 %';
+    utilVal = '62.8 %';
+    calloutText = 'Potential feeder peak stress in approximately 45 min.';
+    calloutType = 'warn';
+  } else if(scenarioKey === 'ev_surge'){
+    sTrend = '↓ 170 kW';
+    dTrend = '↑↑ 295 kW';
+    evTrend = '↑↑ 310 kW (Fleet)';
+    socTrend = '↓↓ 32 %';
+    utilVal = '98.5 %';
+    calloutText = '🚨 Overload trip predicted in approximately 14 min without V2G dispatch.';
+    calloutType = 'crit';
+  } else if(scenarioKey === 'heatwave'){
+    sTrend = '↓ 195 kW';
+    dTrend = '↑↑ 245 kW (HVAC)';
+    evTrend = '→ 28 kW';
+    socTrend = '↓↓ 24 %';
+    utilVal = '93.2 %';
+    calloutText = '⚠️ Transformer thermal threshold breach in approximately 22 min.';
+    calloutType = 'crit';
+  } else if(scenarioKey === 'solar_drop'){
+    sTrend = '↓↓ 28 kW (Cloud Front)';
+    dTrend = '↑ 145 kW';
+    evTrend = '↑ 45 kW';
+    socTrend = '↓↓ 29 %';
+    utilVal = '89.4 %';
+    calloutText = '⚠️ Storage reserve depletion in approximately 28 min.';
+    calloutType = 'warn';
+  } else if(scenarioKey === 'transformer_fault'){
+    sTrend = '↓ 95 kW';
+    dTrend = '↑ 185 kW';
+    evTrend = '↑ 90 kW';
+    socTrend = '↓↓ 18 %';
+    utilVal = '99.8 %';
+    calloutText = '🚨 Critical 105°C oil protection trip in approximately 6 min.';
+    calloutType = 'crit';
+  } else if(condition.tone === 'ai'){
+    sTrend = '↓ 185 kW';
+    dTrend = '↓ 88 kW (Curtailed)';
+    evTrend = '↓ 28 kW (V2G Export)';
+    socTrend = '→ 56 % (Protected)';
+    utilVal = '62.0 %';
+    calloutText = '🟢 Grid stabilized. Nodal stress averted for the next 60 min.';
+    calloutType = 'good';
+  }
+
+  fcSolar.textContent = sTrend;
+  fcDemand.textContent = dTrend;
+  fcEv.textContent = evTrend;
+  fcSoc.textContent = socTrend;
+  fcUtil.textContent = utilVal;
+
+  fcCallout.className = 'fc-callout ' + calloutType;
+  fcCallout.textContent = calloutText;
+}
+
+/* ============================================================
+   11. CRISIS DIRECTOR
+   ============================================================ */
+const CRISES = [
+  {
+    id:'ev_cascade',
+    name:'Fleet arrives at the charging hub',
+    phases:[
+      {label:'Four taxis plug in within a minute. Loading climbs.', dur:7, t:{load:74, ev:150, evCars:5, bat:-40, volt:224, freq:49.92, temp:62}, flow:'ev', tone:'warn', log:['warn','Charging hub demand rising: 150 kW']},
+      {label:'Three more join. The feeder is now beyond its rating.', dur:8, t:{load:97, ev:288, evCars:7, bat:-95, volt:211, freq:49.63, temp:84, pf:.9, soc:48}, flow:'ev', tone:'crit', log:['crit','Feeder EV-01 overloaded, voltage 211 V'], fx:'alarm'},
+      {label:'Voltage at the end of the street is outside statutory band.', dur:9, t:{load:99, ev:302, volt:203, freq:49.52, temp:93, soc:33}, flow:'overload', tone:'crit', log:['crit','Undervoltage on the residential spur'], fx:'sparkline'},
+      {label:'Protection is seconds from tripping. Dispatch something now.', dur:10, t:{load:100, volt:198, freq:49.44, temp:99, soc:21}, flow:'overload', tone:'crit', log:['crit','Transformer within 6 °C of trip'], fx:'alarm'}
+    ],
+    fail:{label:'Charge current limited automatically. Chargers throttled to 50 kW each.', t:{load:78, ev:150, volt:219, freq:49.86, temp:82, soc:20}, flow:'ev', log:['warn','Chargers auto-throttled by the local controller']}
+  },
+  {
+    id:'thermal_trip',
+    name:'Transformer thermal runaway',
+    phases:[
+      {label:'A cooling fan has stalled. Oil temperature starts drifting up.', dur:7, t:{temp:72, load:78, freq:49.9, volt:225}, flow:'import', tone:'warn', log:['warn','Cooling fan 2 failed to start'], fx:'fanfail'},
+      {label:'Heat is building faster than remaining radiators can shed it.', dur:8, t:{temp:92, load:91, volt:216, freq:49.75, pf:.89, soc:44, bat:-70}, flow:'overload', tone:'crit', log:['crit','Oil temperature 92 °C and rising'], fx:'alarm'},
+      {label:'Alarm at 99 °C. Protection will operate at 105 °C.', dur:8, t:{temp:103, load:99, volt:206, freq:49.5, soc:26, bat:-100}, flow:'overload', tone:'crit', log:['crit','Thermal alarm, trip imminent'], fx:'smoke'},
+      {label:'The transformer has tripped. Everything behind it is dark.', dur:11, t:{temp:88, load:0, volt:0, freq:0, solar:0, ev:0, bat:0, pf:0, soc:26}, flow:'off', tone:'crit', log:['crit','TR-402-B tripped on thermal protection — supply lost'], fx:'blackout'}
+    ],
+    fail:{label:'Islanded restoration: the battery re-energised the street at reduced load.', t:{load:41, volt:228, freq:49.96, temp:71, solar:120, ev:0, bat:-60, soc:18}, flow:'v2g', log:['ai','Battery black-started the residential island']}
+  },
+  {
+    id:'cable_fault',
+    name:'Cable fault on the industry feeder',
+    phases:[
+      {label:'An earth fault flashes over on the span to industry.', dur:5, t:{volt:214, freq:49.83, load:84, temp:66}, flow:'import', tone:'crit', log:['crit','Earth fault detected on feeder IND-04'], fx:'sparks'},
+      {label:'The recloser opens, then closes again to test the line.', dur:7, t:{volt:205, freq:49.7, load:88, temp:72}, flow:'overload', tone:'crit', log:['warn','Recloser operation 1 of 3'], fx:'flicker'},
+      {label:'The fault is permanent. The industry feeder locks out.', dur:9, t:{volt:222, freq:49.88, load:62, temp:69, ev:40}, flow:'homes', tone:'crit', log:['crit','Feeder IND-04 locked out — industry without supply'], fx:'blackout_industry'},
+      {label:'Remaining load has shifted onto one feeder and it is heating up.', dur:9, t:{load:93, temp:88, volt:212, freq:49.68, soc:36, bat:-80}, flow:'overload', tone:'crit', log:['crit','Backfeed overloading the remaining circuit']}
+    ],
+    fail:{label:'Industry switched to its standby generator. Feeder loading back within limits.', t:{load:64, temp:66, volt:228, freq:49.97, soc:34, bat:-20}, flow:'normal', log:['ok','Industry transferred to standby generation']}
+  },
+  {
+    id:'heat_and_cloud',
+    name:'Heatwave peak under a cloud front',
+    phases:[
+      {label:'42 °C outside. Every heat pump in the street steps up together.', dur:7, t:{load:84, pf:.9, temp:70, freq:49.86, volt:221, ev:30}, flow:'homes', tone:'warn', log:['warn','Cooling load rising across the residential feeder']},
+      {label:'Cloud crosses the community. Solar collapses in forty seconds.', dur:8, t:{solar:44, irr:120, load:94, volt:214, freq:49.72, bat:-96, soc:46}, flow:'import', tone:'crit', log:['crit','Solar output down 80% — importing at peak price'], fx:'cloud'},
+      {label:'The battery is carrying the shortfall and is nearly empty.', dur:9, t:{soc:14, bat:-108, load:97, volt:208, freq:49.58, temp:90}, flow:'overload', tone:'crit', log:['crit','Battery state of charge 14%'], fx:'alarm'},
+      {label:'Without curtailment the network will shed load on its own.', dur:9, t:{soc:6, load:99.5, volt:202, freq:49.46, temp:97}, flow:'overload', tone:'crit', log:['crit','Under-frequency load shedding armed']}
+    ],
+    fail:{label:'Automatic load shedding dropped industry and half the chargers.', t:{load:70, volt:222, freq:49.9, temp:84, soc:6, ev:20}, flow:'homes', log:['warn','Automatic load shedding operated']}
+  }
+];
+
+const Crisis = {
+  def:null, idx:0, t:0, running:false, elapsed:0, lastId:null,
+  start(){
+    let c = pick(CRISES);
+    let guard=0;
+    while(c.id===this.lastId && guard++<8) c = pick(CRISES);
+    this.lastId = c.id;
+    this.def = c; this.idx = -1; this.t = 0; this.elapsed = 0; this.running = true;
+    $('#crisis-btn').setAttribute('data-running','true');
+    $('#crisis-btn').querySelector('b').textContent = 'Stop the simulation';
+    $('#crisis-sub').textContent = c.name;
+    $('#crisis-track').style.display = 'block';
+    $('#ct-name').textContent = c.name;
+    const steps = $('#ct-steps'); steps.innerHTML = '';
+    c.phases.forEach(()=>steps.appendChild(document.createElement('i')));
+    $$('.cmd[data-scenario]').forEach(b=>b.setAttribute('aria-pressed','false'));
+    logEvent('warn','Crisis simulation started: '+c.name);
+    Audio_.alarm();
+    this.advance();
+  },
+  advance(){
+    this.idx++;
+    if(this.idx >= this.def.phases.length){ this.timeout(); return; }
+    const p = this.def.phases[this.idx];
+    this.t = 0;
+    Object.assign(T, p.t);
+    if(p.flow) flowsFor(p.flow);
+    if(p.log) logEvent(p.log[0], p.log[1]);
+    setState(p.tone, this.def.name, p.label);
+    condition = {
+      tone:p.tone,
+      pill: p.tone==='crit' ? 'CRITICAL' : 'WATCH',
+      headline: p.label.length>46 ? p.label.slice(0,44)+'…' : p.label
+    };
+    $('#ct-phase').textContent = p.label;
+    Array.from($('#ct-steps').children).forEach((n,i)=>n.classList.toggle('on', i<=this.idx));
+    this.fx(p.fx);
+    updateForecast();
+    updateVisualReactions();
+  },
+  fx(kind){
+    switch(kind){
+      case 'alarm': Audio_.alarm(); break;
+      case 'sparks': burstSparks(new THREE.Vector3(17.5,9.8,-17.5)); arcFlash.position.set(17.5,9.8,-17.5); arcFlash.intensity=28; Audio_.trip(); break;
+      case 'sparkline': burstSparks(new THREE.Vector3(24,10,20)); arcFlash.position.set(24,10,20); arcFlash.intensity=20; break;
+      case 'smoke': faultSmokeOn = true; Audio_.alarm(); break;
+      case 'fanfail': transformerParts.fans[1].userData.dead = true; Audio_.beep(300,.3,'square'); break;
+      case 'flicker': window.__flicker = 2.4; break;
+      case 'cloud': Audio_.beep(360,.35,'triangle'); break;
+      case 'blackout':
+        setPowered({homes:false, ev:false, industry:false});
+        burstSparks(new THREE.Vector3(24,7,26)); arcFlash.position.set(24,7,26); arcFlash.intensity=40;
+        faultSmokeOn = true; Audio_.trip(); break;
+      case 'blackout_industry':
+        setPowered({industry:false}); Audio_.trip(); break;
+    }
+  },
+  tick(dt){
+    if(!this.running) return;
+    this.t += dt; this.elapsed += dt;
+    const p = this.def.phases[this.idx];
+    if(!p) return;
+    $('#ct-time').textContent = Math.floor(this.elapsed)+'s';
+    $('#ct-bar').style.width = clamp(this.t/p.dur*100,0,100)+'%';
+    if(this.t >= p.dur) this.advance();
+  },
+  timeout(){
+    const f = this.def.fail;
+    Object.assign(T, f.t);
+    if(f.flow) flowsFor(f.flow);
+    logEvent(f.log[0], f.log[1]);
+    setState('warn', 'Network protected itself', f.label + ' No operator action was taken in time, so the automatic scheme acted instead.');
+    condition = {tone:'warn', pill:'RECOVERING', headline:'Automatic scheme operated'};
+    updateForecast();
+    this.stop(true);
+  },
+  resolve(){
+    if(!this.running) return false;
+    logEvent('ai','Operator mitigation dispatched during '+this.def.name);
+    this.stop(true);
+    return true;
+  },
+  stop(keepState){
+    this.running = false;
+    faultSmokeOn = false;
+    $('#crisis-btn').setAttribute('data-running','false');
+    $('#crisis-btn').querySelector('b').textContent = 'Simulate a crisis';
+    $('#crisis-sub').textContent = 'Runs a random unplanned event end to end';
+    $('#ct-bar').style.width = '100%';
+    transformerParts.fans.forEach(f=>f.userData.dead=false);
+    if(!keepState){
+      setScenario('normal', true);
+      $('#crisis-track').style.display='none';
+    }
+  }
+};
+
+/* ============================================================
+   12. ADVICE + MITIGATION
+   ============================================================ */
+const ADVICE = {
+  normal:['Nothing needs doing. Voltages and phase angles sit comfortably inside limits.','Keep the battery charging while solar is free — target 90% by 15:00.','Hold peer-to-peer trading open so surplus rooftop export stays local.'],
+  ev_surge:['Cap each charger at 50 kW and stagger the start times.','Ask three connected vehicles for 25 kW of export each.','Discharge the community battery at 60 kW for the next twenty minutes.'],
+  heatwave:['Send a demand-response signal to the industry chillers, worth about 30 kW.','Raise home thermostat setpoints by 1.5 °C for thirty minutes.','Inject reactive power to pull the power factor back above 0.95.'],
+  solar_drop:['Ramp the community battery to 90 kW discharge to bridge the cloud front.','Defer charging sessions that have slack before their departure time.','Import at reduced rate rather than all at once to avoid a voltage step.'],
+  transformer_fault:['Shed 35% of industrial load immediately — the ovens first.','Drop all charging to level 1 and stop any charging above 80% state of charge.','Force both cooling fans to full and open the standby feeder to share the load.'],
+  ai_mitigate:['Mitigation is holding. Release curtailment gradually over ten minutes.','Recharge the battery once loading drops below 65%.','Log the event for the network planner — this feeder is close to its limit.']
+};
+
+let sampleFn = null;
+(async function connectModel(){
+  try{
+    if(typeof claude !== 'undefined' && claude && typeof claude.use === 'function'){
+      sampleFn = await claude.use('sample');
+      if(sampleFn) logEvent('ai','Dispatch model connected');
+    }
+  }catch(e){ sampleFn = null; }
+})();
+
+function adviceKey(){
+  return Crisis.running ? (Crisis.def.id==='ev_cascade' ? 'ev_surge' :
+           Crisis.def.id==='thermal_trip' ? 'transformer_fault' :
+           Crisis.def.id==='heat_and_cloud' ? 'heatwave' : 'solar_drop')
+         : scenarioKey;
+}
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function renderAdvice(title, bodyHTML, foot){
+  $('#advice').style.display='block';
+  $('#advice').innerHTML = '<b>'+title+'</b><div id="advice-body">'+bodyHTML+'</div>'+
+    (foot ? '<span style="color:#9fdfbd">'+foot+'</span>' : '');
+}
+function fallbackAdvice(){
+  const list = (ADVICE[adviceKey()]||ADVICE.normal).map(t=>'<li>'+t+'</li>').join('');
+  renderAdvice('Dispatch model · '+(Crisis.running?'live event':'current state'),
+    '<ul>'+list+'</ul>', 'Press “Dispatch mitigation” to carry these out.');
+}
+
+let adviceBusy = false;
+async function showAdvice(){
+  Audio_.beep(760,.1);
+  if(adviceBusy) return;
+  if(!sampleFn){ fallbackAdvice(); logEvent('ai','Dispatch model produced a recommendation'); return; }
+
+  adviceBusy = true;
+  $('#btn-advice').setAttribute('aria-pressed','true');
+  renderAdvice('Dispatch model · thinking', '<div style="opacity:.75">Reading telemetry…</div>');
+
+  const situation = Crisis.running
+    ? 'Live unplanned event: ' + Crisis.def.name + '. Current phase: ' + Crisis.def.phases[Math.max(0,Crisis.idx)].label
+    : 'Operator forced condition: ' + (SCEN[scenarioKey] ? SCEN[scenarioKey].title : scenarioKey);
+
+  const prompt =
+`You are the dispatch optimisation model for Riverbend, a 200 kVA community microgrid in a digital twin.
+The network is a ring main: one 33kV/415V transformer feeds a central hub, which feeds three sectors — 8 homes with rooftop solar and batteries, a 4-bay fast charging hub with vehicle-to-grid capability, and an industry facility with curtailable ovens and chillers. There is a 250 kWh community battery and a 250 kW wind turbine.
+
+${situation}
+
+Live telemetry:
+- feeder loading ${S.load.toFixed(1)}% of 200 kVA
+- transformer oil ${S.temp.toFixed(1)} °C (protection trips at 105)
+- frequency ${S.freq.toFixed(2)} Hz, voltage ${S.volt.toFixed(1)} V, power factor ${S.pf.toFixed(2)}
+- solar ${Math.round(S.solar)} kW, wind ${Math.round(S.wind)} kW
+- community battery ${Math.round(S.soc)}% charged, ${Math.round(S.bat)} kW (negative is discharging)
+- charging hub ${Math.round(S.ev)} kW across ${Math.round(S.evCars)} vehicles
+- supply state: homes ${powered.homes?'on':'OFF'}, industry ${powered.industry?'on':'OFF'}, charging hub ${powered.ev?'on':'OFF'}
+
+Give the control room at most three actions, ordered by urgency. Each action is one line, imperative, with a specific kW or setpoint figure, and must be something this network can actually do (curtail, throttle charging, discharge or charge the battery, request V2G export, adjust tap changer, shed load, force cooling). Then a final line beginning "Why: " of at most 25 words.
+Plain text only. No markdown, no bullets, no preamble. Number the actions 1. 2. 3.`;
+
+  const format = txt => {
+    const lines = String(txt).split('\n').map(l=>l.trim()).filter(Boolean);
+    const acts = lines.filter(l=>/^\d/.test(l)).map(l=>'<li>'+esc(l.replace(/^\d+[.)]\s*/,''))+'</li>');
+    const why = lines.find(l=>/^why[: ]/i.test(l));
+    return (acts.length ? '<ul>'+acts.join('')+'</ul>' : '<div>'+esc(txt)+'</div>') +
+           (why ? '<div style="margin-top:6px;color:#c9b8f5">'+esc(why)+'</div>' : '');
+  };
+
+  try{
+    const res = await sampleFn(prompt, {
+      modelTier:'quick',
+      cache:false,
+      onText: ({text}) => {
+        const b = $('#advice-body');
+        if(b) b.innerHTML = format(text);
+        $('#advice').querySelector('b').textContent = 'Dispatch model · ' + (Crisis.running?'live event':'current state');
+      }
+    });
+    renderAdvice('Dispatch model · '+(Crisis.running?'live event':'current state'),
+      format(res.text), 'Press “Dispatch mitigation” to carry these out.');
+    logEvent('ai','Dispatch model returned a recommendation');
+  }catch(e){
+    if(e && e.code === 'cancelled'){}
+    else {
+      fallbackAdvice();
+      logEvent('warn','Model unavailable ('+((e&&e.code)||'error')+') — showed the standing playbook');
+    }
+  }finally{
+    adviceBusy = false;
+    $('#btn-advice').setAttribute('aria-pressed','false');
+  }
+}
+
+function dispatchFix(){
+  Audio_.ok();
+  const wasCrisis = Crisis.resolve();
+  Object.assign(T, {load:62.4, solar:210, wind:60, temp:56.1, freq:50.02, volt:229.4, pf:.98, soc:54, bat:-28, ev:70, evCars:4, irr:900});
+  flowsFor('v2g');
+  setPowered({homes:true, ev:true, industry:true});
+  condition = {tone:'ai', pill:'MITIGATED', headline:'Vehicle-to-grid support holding the feeder'};
+  setState('ai','Mitigation dispatched',
+    (wasCrisis ? 'You caught it before the protection did. ' : '') +
+    'Four vehicles are exporting 28 kW, industry has curtailed 35 kW of oven load, and voltage recovered within 18 ms.');
+  $('#advice').style.display='block';
+  $('#advice').innerHTML = '<b>Dispatch complete</b><ul>'+
+    '<li>28 kW exported from parked vehicles</li>'+
+    '<li>35 kW of non-critical industrial load curtailed</li>'+
+    '<li>Voltage and frequency back inside limits in 18 ms</li></ul>';
+  $$('.cmd[data-scenario]').forEach(b=>b.setAttribute('aria-pressed','false'));
+  logEvent('ai','V2G export and industrial curtailment dispatched');
+  updateForecast();
+  updateVisualReactions();
+  if(!Crisis.running) $('#crisis-track').style.display='none';
+}
+
+/* ============================================================
+   13. UI WIRING & ASSET INSPECTION
+   ============================================================ */
+$$('.cmd[data-scenario]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    if(Crisis.running) Crisis.stop(false);
+    $('#crisis-track').style.display='none';
+    setScenario(b.dataset.scenario);
+  });
+});
+$('#btn-advice').addEventListener('click', showAdvice);
+$('#btn-fix').addEventListener('click', dispatchFix);
+$('#crisis-btn').addEventListener('click', ()=>{
+  Audio_.resume();
+  if(Crisis.running){
+    Crisis.stop(false);
+    setState('ok','Simulation stopped','The network has been returned to baseline conditions.');
+    logEvent('ok','Crisis simulation stopped');
+    condition = {tone:'ok', pill:'STEADY', headline:'All feeders within limits'};
+    updateForecast();
+    updateVisualReactions();
+  } else {
+    Crisis.start();
+  }
+});
+$('#sound-btn').addEventListener('click', e=>{
+  Audio_.on = !Audio_.on;
+  e.currentTarget.textContent = Audio_.on ? 'Sound on' : 'Sound off';
+  e.currentTarget.setAttribute('aria-pressed', String(Audio_.on));
+  if(Audio_.on){ Audio_.resume(); Audio_.beep(700,.09); } else { Audio_.hum(0); }
+});
+
+const VIEWS = {
+  overview:    {p:[62,44,74], t:[0,3,0]},
+  transformer: {p:[44,18,46], t:[24,5,24]},
+  ev:          {p:[-12,14,-6], t:[-30,3,-26]},
+  homes:       {p:[-10,16,44], t:[-28,3,24]},
+  industry:    {p:[52,22,-6], t:[28,6,-26]}
+};
+let camTarget = null;
+$$('.chip[data-view]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    $$('.chip[data-view]').forEach(o=>o.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    const v = VIEWS[b.dataset.view];
+    camTarget = {p:new THREE.Vector3(...v.p), t:new THREE.Vector3(...v.t)};
+    Audio_.beep(540,.07);
+  });
+});
+$$('.chip[data-time]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    $$('.chip[data-time]').forEach(o=>o.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    applyTime(b.dataset.time);
+    Audio_.beep(600,.07);
+  });
+});
+
+/* Real-Time Detailed Asset Inspector */
+function renderAssetInspector(assetId){
+  const asset = AssetRegistry[assetId];
+  if(!asset) return;
+  currentInspectedAssetId = assetId;
+
+  const live = asset.getLive ? asset.getLive(S) : {};
+
+  $('#i-title').textContent = asset.name;
+  $('#i-id').textContent = asset.id + ' · ' + asset.type;
+  $('#i-desc').textContent = asset.desc;
+  $('#i-loc').textContent = asset.location;
+  $('#i-cap').textContent = asset.rating;
+  $('#i-load').textContent = live.load || '—';
+  $('#i-gen').textContent = live.gen || '0 kW';
+  $('#i-pf').textContent = live.pf || S.pf.toFixed(2);
+  $('#i-flex').textContent = live.flex || '—';
+  $('#i-state').innerHTML = `<span class="i-status-dot" style="background:${live.state && live.state.includes('CRITICAL') ? '#ff5a52' : live.state && live.state.includes('STRESSED') ? '#ffb020' : '#3ddc8a'}"></span>` + (live.state || 'Normal');
+  $('#i-health').textContent = live.health || '99 / 100';
+
+  $('#inspect').style.display = 'block';
+}
+
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+const hint = $('#hint');
+function pickAt(cx,cy){
+  ptr.x = (cx/innerWidth)*2-1; ptr.y = -(cy/innerHeight)*2+1;
+  ray.setFromCamera(ptr, camera);
+  return ray.intersectObjects(inspectables, true)[0];
+}
+
+renderer.domElement.addEventListener('pointermove', e=>{
+  const hit = pickAt(e.clientX, e.clientY);
+  if(hit && hit.object.userData.assetId){
+    const asset = AssetRegistry[hit.object.userData.assetId];
+    hint.style.display='block';
+    hint.style.left = Math.min(e.clientX+14, innerWidth-240)+'px';
+    hint.style.top = (e.clientY+16)+'px';
+    hint.textContent = 'Inspect ' + (asset ? asset.name : 'Component');
+    renderer.domElement.style.cursor='pointer';
+  } else {
+    hint.style.display='none';
+    renderer.domElement.style.cursor='grab';
+  }
+});
+
+renderer.domElement.addEventListener('click', e=>{
+  const hit = pickAt(e.clientX, e.clientY);
+  if(!hit || !hit.object.userData.assetId) return;
+  renderAssetInspector(hit.object.userData.assetId);
+  Audio_.beep(700,.08);
+});
+
+$('#inspect-x').addEventListener('click', ()=>{ 
+  $('#inspect').style.display='none'; 
+  currentInspectedAssetId = null;
+});
+
+/* ============================================================
+   14. GAUGES & TRACES
+   ============================================================ */
+const el = {
+  load:$('#m-load'), loadSub:$('#m-load-sub'), solar:$('#m-solar'), irr:$('#m-irr'),
+  temp:$('#m-temp'), freq:$('#m-freq'), volt:$('#m-volt'), pf:$('#m-pf'),
+  soc:$('#m-soc'), bat:$('#m-bat'), ev:$('#m-ev'), evSub:$('#m-ev-sub'),
+  hdr:$('#m-hdr'), pill:$('#m-pill')
+};
+const COL = {ok:'#3ddc8a', warn:'#ffb020', crit:'#ff5a52', cy:'#4fd3ff', vi:'#b388ff'};
+
+function paintGauges(){
+  el.load.textContent = S.load.toFixed(1)+' %';
+  el.load.style.color = S.load>=90?COL.crit : S.load>=75?COL.warn : COL.ok;
+  el.loadSub.textContent = Math.round(S.load*2)+' / 200 kVA';
+  el.solar.textContent = Math.round(S.solar)+' kW';
+  el.solar.style.color = S.solar<100?COL.warn:'#ffd27a';
+  el.irr.textContent = Math.round(S.irr)+' W/m² · wind '+Math.round(S.wind)+' kW';
+  el.temp.textContent = S.temp.toFixed(1)+' °C';
+  el.temp.style.color = S.temp>=95?COL.crit : S.temp>=78?COL.warn : COL.cy;
+  el.freq.textContent = S.freq.toFixed(2)+' Hz';
+  el.freq.style.color = S.freq<1?COL.crit : Math.abs(S.freq-50)>0.2?COL.crit : Math.abs(S.freq-50)>0.08?COL.warn : COL.ok;
+  el.volt.textContent = S.volt.toFixed(1)+' V';
+  el.volt.style.color = S.volt<10?COL.crit : S.volt<216?COL.crit : S.volt<223?COL.warn : COL.cy;
+  el.pf.textContent = S.pf.toFixed(2);
+  el.pf.style.color = S.pf<.9?COL.warn:COL.vi;
+  el.soc.textContent = Math.round(S.soc)+' %';
+  el.soc.style.color = S.soc<20?COL.crit : S.soc<45?COL.warn : COL.ok;
+  el.bat.textContent = (S.bat>=0?'+':'')+Math.round(S.bat)+' kW '+(S.bat>=0?'charging':'discharging');
+  el.ev.textContent = Math.round(S.ev)+' kW';
+  el.ev.style.color = S.ev>200?COL.crit : S.ev>90?COL.warn : COL.vi;
+  el.evSub.textContent = Math.round(S.evCars)+' vehicles connected';
+  el.hdr.textContent = condition.headline;
+  el.pill.textContent = condition.pill;
+  const pc = condition.tone==='crit'?COL.crit : condition.tone==='warn'?COL.warn : condition.tone==='ai'?COL.vi : COL.ok;
+  el.pill.style.color = pc;
+  const r = parseInt(pc.slice(1,3),16), gg = parseInt(pc.slice(3,5),16), bb = parseInt(pc.slice(5,7),16);
+  el.pill.style.background = 'rgba('+r+','+gg+','+bb+',.16)';
+
+  // Keep inspector updated with live numbers if open
+  if(currentInspectedAssetId && $('#inspect').style.display !== 'none'){
+    const asset = AssetRegistry[currentInspectedAssetId];
+    if(asset && asset.getLive){
+      const live = asset.getLive(S);
+      $('#i-load').textContent = live.load || '—';
+      $('#i-gen').textContent = live.gen || '0 kW';
+      $('#i-pf').textContent = live.pf || S.pf.toFixed(2);
+      $('#i-flex').textContent = live.flex || '—';
+      $('#i-state').innerHTML = `<span class="i-status-dot" style="background:${live.state && live.state.includes('CRITICAL') ? '#ff5a52' : live.state && live.state.includes('STRESSED') ? '#ffb020' : '#3ddc8a'}"></span>` + (live.state || 'Normal');
+      $('#i-health').textContent = live.health || '99 / 100';
+    }
+  }
+}
+
+function traceCtx(id){
+  const c = $(id);
+  const dpr = Math.min(devicePixelRatio,2);
+  c.width = c.clientWidth*dpr; c.height = c.clientHeight*dpr;
+  const x = c.getContext('2d'); x.scale(dpr,dpr);
+  return {c,x,w:c.clientWidth,h:c.clientHeight,dpr};
+}
+let histLoad = new Array(90).fill(58), histFreq = new Array(90).fill(50);
+function drawTraces(){
+  let g = traceCtx('#trace-load');
+  g.x.clearRect(0,0,g.w,g.h);
+  g.x.strokeStyle='rgba(255,255,255,.06)';
+  for(let i=1;i<4;i++){ g.x.beginPath(); g.x.moveTo(0,g.h*i/4); g.x.lineTo(g.w,g.h*i/4); g.x.stroke(); }
+  g.x.fillStyle='rgba(255,90,82,.09)'; g.x.fillRect(0,0,g.w,g.h*.12);
+  const col = S.load>=90?COL.crit:S.load>=75?COL.warn:COL.cy;
+  g.x.beginPath();
+  histLoad.forEach((v,i)=>{
+    const px=i/(histLoad.length-1)*g.w, py=g.h-(v/110)*g.h;
+    i?g.x.lineTo(px,py):g.x.moveTo(px,py);
+  });
+  g.x.strokeStyle=col; g.x.lineWidth=1.8; g.x.stroke();
+  g.x.lineTo(g.w,g.h); g.x.lineTo(0,g.h); g.x.closePath();
+  g.x.fillStyle = col+'22'; g.x.fill();
+
+  g = traceCtx('#trace-freq');
+  g.x.clearRect(0,0,g.w,g.h);
+  g.x.strokeStyle='rgba(255,255,255,.06)';
+  g.x.beginPath(); g.x.moveTo(0,g.h/2); g.x.lineTo(g.w,g.h/2); g.x.stroke();
+  g.x.beginPath();
+  histFreq.forEach((v,i)=>{
+    const px=i/(histFreq.length-1)*g.w;
+    const py=g.h/2 - clamp((v-50)/0.8,-1,1)*(g.h/2-4);
+    i?g.x.lineTo(px,py):g.x.moveTo(px,py);
+  });
+  const fcol = Math.abs(S.freq-50)>0.2?COL.crit:Math.abs(S.freq-50)>0.08?COL.warn:COL.ok;
+  g.x.strokeStyle=fcol; g.x.lineWidth=1.8; g.x.stroke();
+
+  $('#trace-load-v').textContent = S.load.toFixed(1)+'%';
+  $('#trace-freq-v').textContent = S.freq.toFixed(2)+' Hz';
+}
+setInterval(()=>{
+  histLoad.push(clamp(S.load + rnd(-1.2,1.2),0,110)); histLoad.shift();
+  histFreq.push(S.freq>1 ? S.freq + rnd(-.015,.015) : 49.2); histFreq.shift();
+  drawTraces();
+}, 420);
+
+/* ============================================================
+   15. ANIMATION LOOP
+   ============================================================ */
+const clock = new THREE.Clock();
+let lampSmooth = 0;
+
+function updateSim(dt){
+  const rate = clamp(dt*1.4, 0, .35);
+  for(const k in T){ if(typeof S[k]==='number') S[k] = lerp(S[k], T[k], rate); }
+  if(scenarioKey==='normal' && !Crisis.running){
+    S.freq = 50 + Math.sin(clock.elapsedTime*1.7)*0.018 + Math.sin(clock.elapsedTime*.53)*.01;
+    S.volt = 230.6 + Math.cos(clock.elapsedTime*1.1)*.7;
+  }
+  Audio_.hum(clamp((S.load-40)/70, 0, 1) * (S.volt>10?1:0));
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), .05);
+  const t = clock.elapsedTime;
+
+  Crisis.tick(dt);
+  updateSim(dt);
+  paintGauges();
+  updateVisualReactions();
+
+  if(camTarget){
+    camera.position.lerp(camTarget.p, 1-Math.pow(.001,dt));
+    controls.target.lerp(camTarget.t, 1-Math.pow(.001,dt));
+    if(camera.position.distanceTo(camTarget.p)<.4) camTarget=null;
+  }
+  controls.update();
+
+  let flick = 1;
+  if(window.__flicker>0){
+    window.__flicker -= dt;
+    flick = Math.random()>.35 ? 1 : rnd(.05,.4);
+  }
+  lampSmooth = lerp(lampSmooth, lampLevel, dt*2.2);
+  const homeLit = powered.homes ? lampSmooth*flick : 0;
+  const industryLit = powered.industry ? Math.max(lampSmooth,0.25)*flick : 0;
+  const evLit = powered.ev ? Math.max(lampSmooth,0.2)*flick : 0;
+  const streetLit = (powered.homes||powered.industry) ? lampSmooth*flick : 0;
+
+  M.homeWindow.emissiveIntensity = homeLit*1.5;
+  M.worksWindow.emissiveIntensity = industryLit*1.1;
+  M.lamp.emissiveIntensity = streetLit*2.2;
+  streetLamps.forEach(l=>{
+    if(l.cone) l.cone.material.opacity = streetLit*.12;
+    if(l.pool) l.pool.material.opacity = streetLit*.5;
+  });
+  M.screen.emissiveIntensity = powered.ev ? 1.4 : 0;
+  evChargers.forEach((c,i)=>{
+    c.screen.emissiveIntensity = powered.ev ? (1.2 + Math.sin(t*2+i)*.2) : 0;
+    const busy = S.ev > 120;
+    c.ring.emissive.setHex(!powered.ev ? 0x000000 : busy ? 0xff4b42 : 0x2bff92);
+    c.ring.emissiveIntensity = powered.ev ? (busy ? 1.6+Math.sin(t*9)*1.0 : 2.0) : 0;
+  });
+
+  const carLit = lampSmooth>.3 ? 1 : 0;
+  traffic.forEach(v=>{
+    if(v.kind==='ring'){
+      v.ang += v.speed*dt;
+      const dx = -Math.sin(v.ang), dz = Math.cos(v.ang);
+      v.car.position.set(Math.cos(v.ang)*v.radius, 0, Math.sin(v.ang)*v.radius);
+      v.car.rotation.y = Math.atan2(-dx, -dz);
+    } else {
+      v.r += v.dir*v.speed*dt;
+      if(v.r > 98) v.r = 26;
+      if(v.r < 26) v.r = 98;
+      const dx = v.u.x*v.dir, dz = v.u.z*v.dir;
+      v.car.position.set(v.u.x*v.r + dz*3.2, 0, v.u.z*v.r - dx*3.2);
+      v.car.rotation.y = Math.atan2(-dx, -dz);
+    }
+    if(v.car.userData.headlamp) v.car.userData.headlamp.emissiveIntensity = carLit*2.2;
+    if(v.car.userData.taillamp) v.car.userData.taillamp.emissiveIntensity = .5 + carLit*1.2;
+  });
+
+  evCars.forEach((c,i)=>{
+    if(!c.userData.port) return;
+    const busy = powered.ev && S.ev > 5;
+    c.userData.port.emissive.setHex(!powered.ev ? 0x000000 : S.ev>200 ? 0xffb020 : 0x2bff92);
+    c.userData.port.emissiveIntensity = busy ? 1.6 + Math.sin(t*2.6 + i)*1.0 : 0;
+    if(c.userData.taillamp) c.userData.taillamp.emissiveIntensity = busy ? .5 : .15;
+  });
+
+  const hot = clamp((S.temp-55)/45, 0, 1);
+  transformerParts.fans.forEach((f,i)=>{
+    const dead = f.userData.dead;
+    f.rotation.z += (dead?0:(2 + hot*16))*dt;
+  });
+  M.paintedGrey.emissive = M.paintedGrey.emissive || new THREE.Color();
+  M.paintedGrey.emissive.setRGB(hot*0.22, hot*0.045, 0);
+  transformerParts.indicators.forEach((led,i)=>{
+    const crit = S.temp>=90 || S.volt<210 || !powered.homes;
+    led.material.emissive.setHex(crit ? 0xff3b30 : S.temp>=75 ? 0xffb020 : 0x2bff92);
+    led.material.emissiveIntensity = crit ? (Math.sin(t*9+i)>0?3.4:0.25) : 2.0;
+  });
+  faultLight.intensity = hot>0.55 ? (0.6+Math.sin(t*7)*0.4)*14*hot : 0;
+  arcFlash.intensity = Math.max(0, arcFlash.intensity - dt*55);
+
+  homeBatteryLeds.forEach((led,i)=>{
+    if(!powered.homes){ led.material.emissiveIntensity = 0; return; }
+    led.material.emissive.setHex(S.soc<20?0xff3b30 : S.soc<45?0xffb020 : 0x2bff92);
+    led.material.emissiveIntensity = 1.8 + Math.sin(t*1.6+i)*.3;
+  });
+
+  worksFans.forEach((f,i)=> f.rotation.y += (powered.industry ? 3.4 + S.load*0.02 : 0.2)*dt);
+  if(industryGroup.userData.beacon){
+    const b = industryGroup.userData.beacon.material;
+    b.emissiveIntensity = (Math.sin(t*4)>0.4?3.2:0.2);
+  }
+  stackSmoke.forEach((sm,i)=>{
+    const s = sm.s;
+    s.position.y += (powered.industry? 2.2 : .5)*dt;
+    s.position.x = -16 + Math.sin(t*.4 + sm.seed)*(s.position.y-20)*0.12;
+    s.position.z = -8 + Math.cos(t*.3 + sm.seed)*(s.position.y-20)*0.09;
+    s.scale.setScalar(2.4 + (s.position.y-20)*0.22);
+    s.material.opacity = clamp(.26 - (s.position.y-20)*0.006, 0, .3) * (powered.industry?1:.4);
+    if(s.position.y > 54){ s.position.y = 20; }
+  });
+  if(windTurbine) windTurbine.userData.rotor.rotation.z += (0.6 + S.wind*0.012)*dt;
+
+  const irr = clamp(S.irr/940, .05, 1);
+  M.solar.emissive = M.solar.emissive || new THREE.Color();
+  M.solar.emissive.setRGB(0.02*irr, 0.06*irr, 0.14*irr);
+
+  const pulse = .78 + Math.sin(t*5)*.18;
+  function advanceFlow(f, energised){
+    const arr = f.geo.attributes.position.array;
+    for(let i=0;i<f.prog.length;i++){
+      f.prog[i] += f.speed*dt;
+      if(f.prog[i]>1) f.prog[i] -= 1;
+      const p = f.curve.getPointAt(clamp(f.prog[i],0,.9999));
+      arr[i*3]=p.x; arr[i*3+1]=p.y; arr[i*3+2]=p.z;
+    }
+    f.geo.attributes.position.needsUpdate = true;
+    f.mat.opacity = energised ? pulse : 0;
+    f.haloMat.opacity = energised ? .55*pulse : 0;
+    f.tubeMat.opacity = energised ? .34 + Math.sin(t*3)*.08 : 0;
+  }
+  flows.forEach(f=>advanceFlow(f, true));
+
+  const hubCol = condition.tone==='crit' ? 0xff4b42 : condition.tone==='warn' ? 0xffb020 :
+                 condition.tone==='ai' ? 0xb388ff : 0x4fd3ff;
+  const live = powered.homes || powered.industry || powered.ev;
+  hubRing.speed = live ? (.08 + S.load*0.0028) : 0;
+  hubRing.haloMat.color.setHex(hubCol);
+  hubRing.tubeMat.color.setHex(hubCol);
+  advanceFlow(hubRing, live);
+  hubParts.glowRings.forEach((r,i)=>{
+    r.material.color.setHex(hubCol);
+    r.material.opacity = live ? (.45 + Math.sin(t*3 + i*1.6)*.3) : .05;
+    r.scale.setScalar(1 + Math.sin(t*1.4 + i)*0.012);
+  });
+  if(hubParts.halo){
+    hubParts.halo.material.color.setHex(hubCol);
+    hubParts.halo.material.opacity = live ? (.2 + Math.sin(t*2.2)*.08) : .03;
+  }
+  if(hubParts.bus) hubParts.bus.material.emissiveIntensity = 0;
+  if(hubParts.beacon){
+    hubParts.beacon.material.emissive.setHex(condition.tone==='crit' ? 0xff3b30 : 0xff6a3d);
+    hubParts.beacon.material.emissiveIntensity = (Math.sin(t*3.4)>0.3 ? 3.4 : 0.15);
+  }
+  hubParts.screens.forEach((m,i)=>{
+    m.emissive.setHex(hubCol);
+    m.emissiveIntensity = live ? 1.4 + Math.sin(t*2.4+i)*.35 : 0;
+  });
+
+  const sp = window.__sparks;
+  let anyAlive = false;
+  for(let i=0;i<sparkPool.length;i++){
+    const s = sparkPool[i];
+    if(s.life<=0) continue;
+    anyAlive = true;
+    s.life -= dt;
+    s.v.y -= 16*dt;
+    sp.pos[i*3] += s.v.x*dt; sp.pos[i*3+1] += s.v.y*dt; sp.pos[i*3+2] += s.v.z*dt;
+    if(sp.pos[i*3+1] < 0.2){ s.life = 0; sp.pos[i*3+1] = -50; }
+  }
+  if(anyAlive){ sp.geo.attributes.position.needsUpdate = true; sp.mat.opacity = lerp(sp.mat.opacity, .95, dt*6); }
+  else sp.mat.opacity = lerp(sp.mat.opacity, 0, dt*4);
+
+  faultSmoke.forEach((f,i)=>{
+    const target = faultSmokeOn ? .5 : 0;
+    f.s.material.opacity = lerp(f.s.material.opacity, target*clamp(1-f.t,0,1), dt*1.2);
+    if(faultSmokeOn){
+      f.t += dt*0.16;
+      if(f.t>1){ f.t=0; f.s.position.set(24+rnd(-1,1), 6, 26+rnd(-1,1)); f.s.scale.setScalar(2.5); }
+      f.s.position.y += 2.4*dt;
+      f.s.position.x += Math.sin(t+i)*0.5*dt;
+      f.s.scale.setScalar(2.5 + f.t*7);
+    }
+  });
+
+  stars.material.opacity = PRESETS[timeOfDay].stars * (0.75 + Math.sin(t*0.8)*0.15);
+
+  if(composer) composer.render(); else renderer.render(scene, camera);
+}
+
+/* ============================================================
+   16. BOOT
+   ============================================================ */
+applyTime('day');
+setScenario('normal', true);
+logEvent('ok','Digital twin online — 214 metered connections');
+updateForecast();
+drawTraces();
+animate();
+
+setTimeout(()=>{
+  const b = $('#boot');
+  b.style.opacity = '0';
+  setTimeout(()=>b.remove(), 650);
+}, 420);
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if(composer) composer.setSize(innerWidth, innerHeight);
+  drawTraces();
+});
+addEventListener('pointerdown', ()=>Audio_.resume(), {once:true});
+
+})();
+</script>
+</body>
+</html>
+
